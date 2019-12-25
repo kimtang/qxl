@@ -1,0 +1,6 @@
+~*
+.vs
+packages
+qxl/bin
+qxl/obj
+qxl/Properties
