@@ -1,326 +1,54 @@
 ﻿
 namespace qxl
 
+open System
+open System.Threading
+open ExcelDna.Integration
+
+/// Some utility functions for connecting Excel-DNA async with F#
+module FsAsyncUtil =
+    /// A helper to pass an F# Async computation to Excel-DNA 
+    let excelRunAsync functionName parameters async =
+        let obsSource =
+            ExcelObservableSource(
+                fun () -> 
+                { new IExcelObservable with
+                    member __.Subscribe observer =
+                        // make something like CancellationDisposable
+                        let cts = new CancellationTokenSource ()
+                        let disp = { new IDisposable with member __.Dispose () = cts.Cancel () }
+                        // Start the async computation on this thread
+                        Async.StartWithContinuations 
+                            (   async, 
+                                ( fun result -> 
+                                    observer.OnNext(result)
+                                    observer.OnCompleted () ),
+                                ( fun ex -> observer.OnError ex ),
+                                ( fun ex ->
+                                    observer.OnCompleted () ),
+                                cts.Token 
+                            )
+                        // return the disposable
+                        disp
+                }) 
+        ExcelAsyncUtil.Observe (functionName, parameters, obsSource)
+
+    /// A helper to pass an F# IObservable to Excel-DNA
+    let excelObserve functionName parameters observable = 
+        let obsSource =
+            ExcelObservableSource(
+                fun () -> 
+                { new IExcelObservable with
+                    member __.Subscribe observer =
+                        // Subscribe to the F# observable
+                        Observable.subscribe (fun value -> observer.OnNext (value)) observable
+                })
+        ExcelAsyncUtil.Observe (functionName, parameters, obsSource)
+
 module qxl =
     open System.Collections.Generic
-    open ExcelDna.Integration
     open kx
-
-    let rec stringify (r:kx.KObject) = 
-        let abool x =
-            match x with
-            | true -> "1"
-            | false -> "0"
-        match r with
-        | kx.Bool(x) -> match x with
-                        | true -> "1b"
-                        | false -> "0b"
-        | kx.Byte(x) -> x |> string 
-        | kx.Guid(x) -> x |> string
-        | kx.Short(x) -> x |> string
-        | kx.Int(x) -> x |> string
-        | kx.Long(x) -> x |> string
-        | kx.Real(x) -> x |> string
-        | kx.Float(x) -> x |> string
-        | kx.Char(x) -> x |> string
-        | kx.String(x) -> "`"+x 
-        | kx.Date(x) -> x.ToString("yyyy.MM.dd")
-        | kx.Timestamp(x) -> x.ToString("yyyy.MM.ddDHH:mm:ss.ffffzzz")
-        | kx.Minute(x) -> x.ToString("HH:mm")
-        | kx.Second(x) -> x.ToString("HH:mm:ss")
-        | kx.Month(x) -> x.ToString("yyyy.MM")
-        | kx.DateTime(x) -> x.ToString("yyyy.MM.ddDHH:mm:ss.fff")
-        | kx.TimeSpan(x) -> x.ToString("HH:mm:ss.fff")
-        | kx.KTimespan(x) -> x.ToString("HH:mm:ss.ffffzzz")
-        | kx.AKObject(x) ->
-            match x.Length with
-            | 0 -> "()"
-            | 1 -> "enlist " + stringify x.[0]
-            | _ -> x |> List.map stringify |> List.reduce(fun x y -> x  + ";" + y) |> (fun x -> "(" + x + ")" ) 
-        | kx.ABool(x) ->
-            match x.Length with
-            | 0 -> "`bool$()"
-            | 1 -> "enlist " + (kx.Bool(x.[0]) |> stringify )
-            | _ -> x  |> Array.map abool |> Array.reduce(fun x y -> x + y) |> (fun x -> x + "b" )        
-        | kx.AByte(x) ->
-            match x.Length with
-            | 0 -> "`byte$()"
-            | 1 -> "enlist " + (kx.Byte(x.[0]) |> stringify ) 
-            | _ -> x  |> Array.map string |> Array.reduce(fun x y -> x  + " " + y)
-
-        | kx.AGuid(x) ->
-            match x.Length with
-            | 0 -> "`guid$()"
-            | 1 -> "enlist " + (kx.Guid(x.[0]) |> stringify )
-            | _ -> x |> Array.map string |> Array.reduce(fun x y -> x  + ";" + y) |> (fun x -> "(" + x + ")" )
-
-        | kx.AShort(x) ->
-            match x.Length with
-            | 0 -> "`short()"
-            | 1 -> "enlist " + (kx.Short(x.[0]) |> stringify )
-            | _ -> x |> Array.map string |> Array.reduce(fun x y -> x  + " " + y)
-        | kx.AInt(x) ->
-            match x.Length with
-            | 0 -> "`int()"
-            | 1 -> "enlist " + (kx.Int(x.[0]) |> stringify )
-            | _ -> x |> Array.map string |> Array.reduce(fun x y -> x  + " " + y)
-        | kx.ALong(x) ->
-            match x.Length with
-            | 0 -> "`long()"
-            | 1 -> "enlist " + (kx.Long(x.[0]) |> stringify )
-            | _ -> x |> Array.map string |> Array.reduce(fun x y -> x  + " " + y)
-        | kx.AReal(x) ->
-            match x.Length with
-            | 0 -> "`real()"
-            | 1 -> "enlist " + (kx.Real(x.[0]) |> stringify )
-            | _ -> x |> Array.map string |> Array.reduce(fun x y -> x  + " " + y)
-        | kx.AFloat(x) ->
-            match x.Length with
-            | 0 -> "`float()"
-            | 1 -> "enlist " + (kx.Float(x.[0]) |> stringify )
-            | _ -> x |> Array.map string |> Array.reduce(fun x y -> x  + " " + y)
-        | kx.AChar(x) ->
-            match x.Length with
-            | 0 -> "`char()"
-            | 1 -> "enlist " + (kx.Char(x.[0]) |> stringify )
-            | _ -> x |> Array.map string |> Array.reduce(fun x y -> x  +  y)|> (fun x -> "\"" + x + "\"" )
-        | kx.AString(x) ->
-            match x.Length with
-            | 0 -> "`$()"
-            | 1 -> "enlist " + (kx.String(x.[0]) |> stringify )
-            | _ -> x |> Array.map (fun x-> "`"+x) |> Array.reduce(fun x y -> x  + y) 
-        | kx.ADate(x) ->
-            match x.Length with
-            | 0 -> "`date()"
-            | 1 -> "enlist " + (kx.Date(x.[0]) |> stringify )
-            | _ -> x |> Array.map (fun x -> x.ToString("yyyy.MM.dd")) |> Array.reduce(fun x y -> x  + " " + y)
-        | kx.ATimestamp(x) ->
-            match x.Length with
-            | 0 -> "`timestamp()"
-            | 1 -> "enlist " + (kx.Timestamp(x.[0]) |> stringify )
-            | _ -> x |> Array.map (fun x -> x.ToString("yyyy.MM.ddDHH:mm:ss.ffffzzz")) |> Array.reduce(fun x y -> x  + " " + y)
-        | kx.AMinute(x) ->
-            match x.Length with
-            | 0 -> "`minute()"
-            | 1 -> "enlist " + (kx.Minute(x.[0]) |> stringify )
-            | _ -> x |> Array.map (fun x -> x.ToString("HH:mm")) |> Array.reduce(fun x y -> x  + " " + y)
-        | kx.ASecond(x) ->
-            match x.Length with
-            | 0 -> "`second()"
-            | 1 -> "enlist " + (kx.Second(x.[0]) |> stringify )
-            | _ -> x |> Array.map (fun x -> x.ToString("HH:mm:ss")) |> Array.reduce(fun x y -> x  + " " + y)
-        | kx.AMonth(x) ->
-            match x.Length with
-            | 0 -> "`month()"
-            | 1 -> "enlist " + (kx.Month(x.[0]) |> stringify )
-            | _ -> x |> Array.map (fun x -> x.ToString("yyyy.MM")) |> Array.reduce(fun x y -> x  + " " + y) 
-        | kx.ADateTime(x) ->
-            match x.Length with
-            | 0 -> "`datetime()"
-            | 1 -> "enlist " + (kx.DateTime(x.[0]) |> stringify )
-            | _ -> x |> Array.map (fun x -> x.ToString("yyyy.MM.ddDHH:mm:ss.fff")) |> Array.reduce(fun x y -> x  + " " + y)
-        | kx.AKTimespan(x) ->
-            match x.Length with
-            | 0 -> "`timespan()"
-            | 1 -> "enlist " + (kx.KTimespan(x.[0]) |> stringify )
-            | _ -> x |> Array.map (fun x -> x.ToString("HH:mm:ss.fff")) |> Array.reduce(fun x y -> x  + " " + y)
-        | kx.ATimeSpan(x) ->
-            match x.Length with
-            | 0 -> "`timespan()"
-            | 1 -> "enlist " + (kx.TimeSpan(x.[0]) |> stringify )
-            | _ -> x |> Array.map (fun x -> x.ToString("HH:mm:ss.ffffzzz")) |> Array.reduce(fun x y -> x  + " " + y)
-        | kx.Dict(x,y) ->
-            let sx = stringify x
-            let sy = stringify y
-            sx + "!" + sy
-
-        | kx.Flip(x,y) -> 
-            let sx = 
-                match x.Length with
-                | 0 -> "()"
-                | 1 -> "enlist`"+ x.[0]
-                | _ -> x |> Array.map(fun x -> "`"+x) |> Array.reduce(fun x y -> x + y)
-            let sy = 
-                match y.Length with
-                |0 -> ""
-                |1 -> "enlist " + stringify y.[0]
-                |_ -> y |> List.map stringify |> List.reduce(fun x y -> x  + ";" + y) |> (fun x -> "(" + x + ")" )
-
-            "flip "+sx + "!" + sy
-        | _ -> "nyi" 
-
-    let rec conv_as_array (k:kx.KObject) =
-        match k with
-        | ABool(x) -> x |> Array.map (fun x -> x :> obj)
-        | AGuid(x) -> x |> Array.map (fun x -> x |> string :> obj)
-        | AByte(x) -> x |> Array.map (fun x -> x |> float :> obj)
-        | AShort(x) -> x |> Array.map (fun x -> x |> float :> obj)
-        | AInt(x) -> x |> Array.map (fun x -> x |> float :> obj)
-        | ALong(x) -> x |> Array.map (fun x -> x |> float :> obj)
-        | AReal(x) -> x |> Array.map (fun x -> x |> float :> obj)
-        | AFloat(x) -> x |> Array.map (fun x -> x |> float :> obj)
-        | AChar(x) -> x |> Array.map (fun x -> x |> string :> obj)
-        | AString(x) -> x |> Array.map (fun x -> x :> obj)
-        | ATimestamp(x) -> x |> Array.map (fun x -> x :> obj)
-        | AMonth(x) -> x |> Array.map (fun x -> x :> obj)
-        | ADate(x) -> x |> Array.map (fun x -> x :> obj)
-        | ADateTime(x) -> x |> Array.map (fun x -> x :> obj)
-        | AKTimespan(x) -> x |> Array.map (fun x -> x :> obj)
-        | AMinute(x) -> x |> Array.map (fun x -> x :> obj)
-        | ASecond(x) -> x |> Array.map (fun x -> x :> obj)
-        | ATimeSpan(x) -> x |> Array.map (fun x -> x :> obj)
-        | Flip(x,y) -> 
-            let xs = x |> Array.map (fun x -> x :> obj)
-            let yc = y |> List.map (conv_as_array ) |> List.toArray
-            // get the size an merge it together
-            [|1 :> obj|] 
-
-
-
-        | Dict(x,y) -> 
-            // let xc = conv_as_matrix  x
-            // let yc = conv_as_matrix  y
-            // get the size and merge it together
-            [|1 :> obj|] 
-        | AKObject(x) -> x |> List.map ( fun x -> 
-                                            match x with
-                                            | Bool(x) -> x :> obj
-                                            | Guid(x) -> x |> string :> obj
-                                            | Byte(x) -> x |> float :> obj
-                                            | Short(x) -> x |> float :> obj 
-                                            | Int(x) -> x |> float :> obj
-                                            | Long(x) -> x |> float :> obj
-                                            | Real(x) -> x |> float :> obj
-                                            | Float(x) -> x :> obj
-                                            | Char(x) -> x :> obj
-                                            | String(x) -> x :> obj 
-                                            | Timestamp(x) -> x :> obj
-                                            | Month(x) -> x :> obj
-                                            | Date(x) -> x :> obj
-                                            | DateTime(x) -> x :> obj
-                                            | KTimespan(x) -> x :> obj
-                                            | Minute(x) -> x :> obj
-                                            | Second(x) -> x :> obj
-                                            | TimeSpan(x) -> x :> obj
-                                            | _ -> stringify x :> obj 
-                                        ) |> List.toArray 
-        | _ -> [|1 :> obj|] 
-
-
-    // this is now used in table and dic
-    let rec conv_as_matrix (k:kx.KObject) =
-        match k with
-        | ABool(x) -> x |> Array.map (fun x -> x :> obj) |> Array.create 1
-        | AGuid(x) -> x |> Array.map (fun x -> x |> string :> obj) |> Array.create 1
-        | AByte(x) -> x |> Array.map (fun x -> x |> float :> obj) |> Array.create 1
-        | AShort(x) -> x |> Array.map (fun x -> x |> float :> obj) |> Array.create 1
-        | AInt(x) -> x |> Array.map (fun x -> x |> float :> obj) |> Array.create 1
-        | ALong(x) -> x |> Array.map (fun x -> x |> float :> obj) |> Array.create 1
-        | AReal(x) -> x |> Array.map (fun x -> x |> float :> obj) |> Array.create 1
-        | AFloat(x) -> x |> Array.map (fun x -> x |> float :> obj) |> Array.create 1
-        | AChar(x) -> x |> Array.map (fun x -> x |> string :> obj) |> Array.create 1
-        | AString(x) -> x |> Array.map (fun x -> x :> obj) |> Array.create 1
-        | ATimestamp(x) -> x |> Array.map (fun x -> x :> obj) |> Array.create 1
-        | AMonth(x) -> x |> Array.map (fun x -> x :> obj) |> Array.create 1
-        | ADate(x) -> x |> Array.map (fun x -> x :> obj) |> Array.create 1
-        | ADateTime(x) -> x |> Array.map (fun x -> x :> obj) |> Array.create 1
-        | AKTimespan(x) -> x |> Array.map (fun x -> x :> obj) |> Array.create 1
-        | AMinute(x) -> x |> Array.map (fun x -> x :> obj) |> Array.create 1
-        | ASecond(x) -> x |> Array.map (fun x -> x :> obj) |> Array.create 1
-        | ATimeSpan(x) -> x |> Array.map (fun x -> x :> obj) |> Array.create 1
-        | Flip(x,y) -> 
-            let xs = x |> Array.map (fun x -> [|x :> obj|]) 
-            let yc = y |> List.map (conv_as_array ) |> List.toArray
-            // get the size an merge it together
-            let r = yc |> Array.zip xs |> Array.map (fun (x,y) -> x |> Array.append y)
-            r
-
-
-
-        | Dict(x,y) -> 
-            let xc = conv_as_matrix  x
-            let yc = conv_as_matrix  y
-            // get the size and merge it together
-            [|1 :> obj|] |> Array.create 1
-
-        | AKObject(x) -> let x = x |> List.map conv_as_array
-                         let mn = x |> List.map (fun x -> x.Length) |> List.max
-                         let r = x |> List.map (fun x -> [|for i in 1 .. (mn - x.Length) -> "" :> obj |] |> Array.append x) |> List.toArray
-                         r
-
-        | _ -> [|1 :> obj|] |> Array.create 1 
-
-    let ktox (k:kx.KObject) = 
-        match k with
-        | Bool(x) -> x :> obj
-        | Guid(x) -> x |> string :> obj
-        | Byte(x) -> x |> float :> obj
-        | Short(x) -> x |> float :> obj 
-        | Int(x) -> x |> float :> obj
-        | Long(x) -> x |> float :> obj
-        | Real(x) -> x |> float :> obj
-        | Float(x) -> x :> obj
-        | Char(x) -> x :> obj
-        | String(x) -> "`"+x :> obj 
-        | Timestamp(x) -> x :> obj
-        | Month(x) -> x :> obj
-        | Date(x) -> x :> obj
-        | DateTime(x) -> x :> obj
-        | KTimespan(x) -> x :> obj
-        | Minute(x) -> x :> obj
-        | Second(x) -> x :> obj
-        | TimeSpan(x) -> x :> obj
-        | ABool(x) -> x |> Array.map (fun x -> x :> obj) :> obj
-        | AGuid(x) -> x |> Array.map (fun x -> x |> string :> obj) :> obj
-        | AByte(x) -> x |> Array.map (fun x -> x |> float :> obj) :> obj
-        | AShort(x) -> x |> Array.map (fun x -> x |> float :> obj) :> obj
-        | AInt(x) -> x |> Array.map (fun x -> x |> float :> obj) :> obj
-        | ALong(x) -> x |> Array.map (fun x -> x |> float :> obj) :> obj
-        | AReal(x) -> x |> Array.map (fun x -> x |> float :> obj) :> obj
-        | AFloat(x) -> x |> Array.map (fun x -> x |> float :> obj) :> obj
-        | AChar(x) -> x |> Array.map (fun x -> x |> string :> obj) :> obj
-        | AString(x) -> x |> Array.map (fun x -> x :> obj) :> obj
-        | ATimestamp(x) -> x |> Array.map (fun x -> x :> obj) :> obj
-        | AMonth(x) -> x |> Array.map (fun x -> x :> obj) :> obj
-        | ADate(x) -> x |> Array.map (fun x -> x :> obj) :> obj
-        | ADateTime(x) -> x |> Array.map (fun x -> x :> obj) :> obj
-        | AKTimespan(x) -> x |> Array.map (fun x -> x :> obj) :> obj
-        | AMinute(x) -> x |> Array.map (fun x -> x :> obj) :> obj
-        | ASecond(x) -> x |> Array.map (fun x -> x :> obj) :> obj
-        | ATimeSpan(x) -> x |> Array.map (fun x -> x :> obj) :> obj
-        | Flip(x,y) -> 
-            let xs = x |> Array.map (fun x -> [|x :> obj|]) 
-            let yc = y |> List.map (conv_as_array ) |> List.toArray
-            // get the size an merge it together
-            let r = xs |> Array.zip yc |> Array.map (fun (x,y) -> x |> Array.append y)
-            
-            let twoDimensionalArray = Array2D.init r.[0].Length r.Length  (fun i j -> r.[j].[i])
-            
-            twoDimensionalArray :> obj
-
-        | Dict(x,y) -> 
-            let xc = conv_as_matrix x
-            let yc = conv_as_matrix y
-
-            let yc = match yc.Length with
-                     | 1 -> yc
-                     | _ -> [|for i in 1 .. yc.[0].Length -> [| for j in 1 .. yc.Length -> yc.[j - 1].[i - 1] |] |]
-            // let yc2 = Array2D.init r.[0].Length r.Length (fun i j -> r.[j].[i])
-
-            // let r = yc |> Array.zip xc |> Array.map (fun (x,y) -> y |> Array.append x)
-
-            let r = yc |> Array.append xc 
-
-            // let m = r |> Array.map (fun x -> x.Length) |> Array.max
-            let twoDimensionalArray = Array2D.init r.[0].Length r.Length   (fun i j -> r.[j].[i])
-            twoDimensionalArray :> obj
-
-        | AKObject(x) -> let x = x |> List.map conv_as_array
-                         let mn = x |> List.map (fun x -> x.Length) |> List.max
-                         let r = x |> List.map (fun x -> [|for i in 1 .. (mn - x.Length) -> "" :> obj |] |> Array.append x) |> List.toArray
-                         let twoDimensionalArray = Array2D.init r.Length r.[0].Length  (fun i j -> r.[i].[j])
-                         twoDimensionalArray :> obj
-        | _ -> 1 :> obj
+    open ktox
 
     type XObject =
         | ExcelMissing
@@ -371,10 +99,12 @@ module qxl =
         let con = match connectionMaps.ContainsKey uid with
                   | false -> 
                         let con = kx.c(host,port,user)
-                        connectionMaps.Add(uid,con)
                         con
-                  | true -> connectionMaps.Item uid
-        
+                  | true -> let con = connectionMaps.Item uid
+                            con.close()
+                            let con = kx.c(host,port,user)
+                            con
+        connectionMaps.Add(uid,con)
         uid
 
     [<ExcelFunction(Description="execute query")>]
@@ -402,3 +132,72 @@ module qxl =
         | true -> connectionMaps.Item(uid).close()
 
         uid |> connectionMaps.Remove 
+                    
+    // Helper that will create a timer that ticks at timerInterval for timerDuration, then stops
+    // Not exported to Excel (incompatible type)
+    let createTimer timerInterval timerDuration =
+        // setup a timer
+        let timer = new System.Timers.Timer(float timerInterval)
+        timer.AutoReset <- true
+        // return an async task for stopping
+        let timerStop = async {
+            timer.Start()
+            do! Async.Sleep timerDuration
+            timer.Stop() 
+            }
+        Async.Start timerStop
+        // Make sure that the type we observe in the event is supported by Excel
+        // (events like timer.Elapsed are automatically IObservable in F#)
+        timer.Elapsed |> Observable.map (fun elapsed -> [|"H: "+DateTime.Now.ToString("HH:mm:ss.fff");"G: "+DateTime.Now.ToString("HH:mm:ss.fff")|] |> Array.map(fun x -> x :> obj) :> obj) 
+
+    // Excel function to start the timer - using the fact that F# events implement IObservable
+    [<ExcelFunction(Description="start timer")>]
+    let startTimer timerInterval timerDuration =
+        FsAsyncUtil.excelObserve "startTimer" [|float timerInterval; float timerDuration|] (createTimer timerInterval timerDuration)
+
+
+    type kdbsubscriber(host:string,port:int,user:string) =
+        let host ,port, user=host ,port, user
+        let con = kx.c(host,port,user)
+        let on_event = new Event<kx.KObject>()
+
+        member o.onEvent = on_event.Publish
+        member o.start() =
+            async {
+                while true do
+                    let r = con.k()
+                    on_event.Trigger(r)
+            } |> Async.Start 
+        member o.sub(table:string,sym:string) = 
+            con.ks(".u.sub",kx.KObject.String(table),kx.KObject.String(sym)) 
+            o.start()
+        member o.k() = con.k()
+            
+
+    let subscriberMaps = new Dictionary<string,kdbsubscriber>()
+
+    [<ExcelFunction(Description="Create subscriber")>]
+    let open_subscriber (uid:string) (host:string) (port:int) (user:string) =
+        let uid = match subscriberMaps.ContainsKey uid with
+                  | false -> 
+                        let con = kdbsubscriber(host,port,user)
+                        subscriberMaps.Add(uid,con)
+                        uid
+                  | true -> uid
+    
+        uid
+
+    [<ExcelFunction(Description="subscribe to table and sym")>]
+    let subscribe (uid:string) (table:string) (sym:string) =
+        let s = subscriberMaps.Item uid
+        s.sub(table,sym)
+        FsAsyncUtil.excelObserve "subscribe" [|uid; table;sym|] (s.onEvent |> Observable.map (fun x -> 1 :> obj) )
+
+    [<ExcelFunction(Description="call manually")>]
+    let mcall (uid:string) =
+        let s = subscriberMaps.Item uid
+        s.k() |> ktox 
+    
+        
+
+

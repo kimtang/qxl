@@ -4,3 +4,6 @@ packages
 qxl/bin
 qxl/obj
 qxl/Properties
+*.sublime-project
+*.sublime-workspace
+qxl/main.fsx

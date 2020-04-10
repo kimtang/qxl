@@ -54,7 +54,9 @@
     <None Include="Properties\ExcelDna.Build.props" />
     <None Include="qxl-AddIn.dna" />
     <Compile Include="c.fs" />
+    <Compile Include="ktox.fs" />
     <Compile Include="qxl.fs" />
+    <None Include="main.fsx" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="ExcelDna.Integration">
