@@ -44,6 +44,7 @@ module FsAsyncUtil =
                         Observable.subscribe (fun value -> observer.OnNext (value)) observable
                 })
         ExcelAsyncUtil.Observe (functionName, parameters, obsSource)
+            
 
 module qxl =
     open System.Collections.Generic
@@ -80,7 +81,7 @@ module qxl =
         new Dictionary<string,kx.c>()
 
     [<ExcelFunction(Description="My first .NET function")>]
-    let dnaDescribe (arg:obj) =
+    let dna_escribe (arg:obj) =
         match arg with
         | :? System.DateTime as o-> "DateTime"
         | :? ExcelEmpty as o-> "ExcelEmpty"
@@ -95,38 +96,67 @@ module qxl =
 
 
     [<ExcelFunction(Description="open connection")>]
-    let open_connection (uid:string) (host:string) (port:int) (user:string) =
+    let dna_open_connection (uid:string) (host:string) (port:int) (user:string) =
         let con = match connectionMaps.ContainsKey uid with
                   | false -> 
                         let con = kx.c(host,port,user)
+                        connectionMaps.Add(uid,con)
                         con
                   | true -> let con = connectionMaps.Item uid
-                            con.close()
-                            let con = kx.c(host,port,user)
-                            con
-        connectionMaps.Add(uid,con)
+                            match con.Connected() with
+                            | true -> con
+                            | false -> connectionMaps.Remove uid |> ignore
+                                       let con = kx.c(host,port,user)
+                                       connectionMaps.Add(uid,con)
+                                       con
+        
         uid
 
     [<ExcelFunction(Description="execute query")>]
-    let execute (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) (c:obj) = 
-
+    let dna_execute (random:float) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
         match connectionMaps.ContainsKey uid with
         | false -> "uid not found" :> obj
         | true -> let con = connectionMaps.Item uid
-                  let x,y,z,a,b,c = xtok x,xtok y,xtok z,xtok a,xtok b,xtok c
+                  let x,y,z,a,b = xtok x,xtok y,xtok z,xtok a,xtok b
                   
-                  let r = match x,y,z,a,b,c with
-                          | ExcelMissing,_,_,_,_,_-> con.k(query)
-                          | KObject(x),ExcelMissing,_,_,_,_-> con.k(query,x)
-                          | KObject(x),KObject(y),ExcelMissing,_,_,_-> con.k(query,x,y)
-                          | KObject(x),KObject(y),KObject(z),ExcelMissing,_,_-> con.k(query,x,y,z)
-                          | KObject(x),KObject(y),KObject(z),KObject(a),ExcelMissing,_-> con.k(query,x,y,z,a)
-                          | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b),ExcelMissing-> con.k(query,x,y,z,a,b)
-                          | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b),KObject(c)-> con.k(query,x,y,z,a,b,c)
+                  let r = match x,y,z,a,b with
+                          | ExcelMissing,_,_,_,_-> con.k(query)
+                          | KObject(x),ExcelMissing,_,_,_-> con.k(query,x)
+                          | KObject(x),KObject(y),ExcelMissing,_,_-> con.k(query,x,y)
+                          | KObject(x),KObject(y),KObject(z),ExcelMissing,_-> con.k(query,x,y,z)
+                          | KObject(x),KObject(y),KObject(z),KObject(a),ExcelMissing-> con.k(query,x,y,z,a)
+                          | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b)-> con.k(query,x,y,z,a,b)
+                          // | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b),KObject(c)-> con.k(query,x,y,z,a,b,c)
                   ktox r
 
+    let asyncExecute (random) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
+        let on_event = new Event<obj>()
+        async {
+            let r = 
+                match connectionMaps.ContainsKey uid with
+                | false -> "uid not found" :> obj
+                | true -> let con = connectionMaps.Item uid
+                          let x,y,z,a,b = xtok x,xtok y,xtok z,xtok a,xtok b                  
+                          let r = match x,y,z,a,b with
+                                  | ExcelMissing,_,_,_,_-> con.k(query)
+                                  | KObject(x),ExcelMissing,_,_,_-> con.k(query,x)
+                                  | KObject(x),KObject(y),ExcelMissing,_,_-> con.k(query,x,y)
+                                  | KObject(x),KObject(y),KObject(z),ExcelMissing,_-> con.k(query,x,y,z)
+                                  | KObject(x),KObject(y),KObject(z),KObject(a),ExcelMissing-> con.k(query,x,y,z,a)
+                                  | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b)-> con.k(query,x,y,z,a,b)
+                                  // | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b),KObject(c)-> con.k(query,x,y,z,a,b,c)
+                          ktox r
+            on_event.Trigger(r)
+        } |> Async.Start
+        on_event.Publish 
+
+    [<ExcelFunction(Description="async execute query")>]
+    let dna_axecute (random:float) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
+        FsAsyncUtil.excelObserve "asyncExecute" [|(random :> obj); (uid :> obj); (query :> obj); x; y; z; a; b |] (asyncExecute random uid query x y z a b )
+        
+
     [<ExcelFunction(Description="execute query")>]
-    let close_connection (uid:string)  =
+    let dna_close_connection (uid:string)  =
         match connectionMaps.ContainsKey uid with
         | false -> ()
         | true -> connectionMaps.Item(uid).close()
@@ -137,6 +167,7 @@ module qxl =
     // Not exported to Excel (incompatible type)
     let createTimer timerInterval timerDuration =
         // setup a timer
+        let startTime = DateTime.Now
         let timer = new System.Timers.Timer(float timerInterval)
         timer.AutoReset <- true
         // return an async task for stopping
@@ -148,55 +179,37 @@ module qxl =
         Async.Start timerStop
         // Make sure that the type we observe in the event is supported by Excel
         // (events like timer.Elapsed are automatically IObservable in F#)
-        timer.Elapsed |> Observable.map (fun elapsed -> [|"H: "+DateTime.Now.ToString("HH:mm:ss.fff");"G: "+DateTime.Now.ToString("HH:mm:ss.fff")|] |> Array.map(fun x -> x :> obj) :> obj) 
+        timer.Elapsed |> Observable.map (fun elapsed -> [|"S: "+startTime.ToString("HH:mm:ss.fff");"G: "+DateTime.Now.ToString("HH:mm:ss.fff")|] |> Array.map(fun x -> x :> obj) :> obj) 
 
     // Excel function to start the timer - using the fact that F# events implement IObservable
     [<ExcelFunction(Description="start timer")>]
-    let startTimer timerInterval timerDuration =
+    let dna_startTimer timerInterval timerDuration =
+        
         FsAsyncUtil.excelObserve "startTimer" [|float timerInterval; float timerDuration|] (createTimer timerInterval timerDuration)
 
 
-    type kdbsubscriber(host:string,port:int,user:string) =
-        let host ,port, user=host ,port, user
-        let con = kx.c(host,port,user)
-        let on_event = new Event<kx.KObject>()
-
-        member o.onEvent = on_event.Publish
-        member o.start() =
-            async {
-                while true do
-                    let r = con.k()
-                    on_event.Trigger(r)
-            } |> Async.Start 
-        member o.sub(table:string,sym:string) = 
-            con.ks(".u.sub",kx.KObject.String(table),kx.KObject.String(sym)) 
-            o.start()
-        member o.k() = con.k()
-            
-
-    let subscriberMaps = new Dictionary<string,kdbsubscriber>()
-
     [<ExcelFunction(Description="Create subscriber")>]
-    let open_subscriber (uid:string) (host:string) (port:int) (user:string) =
-        let uid = match subscriberMaps.ContainsKey uid with
-                  | false -> 
-                        let con = kdbsubscriber(host,port,user)
-                        subscriberMaps.Add(uid,con)
-                        uid
-                  | true -> uid
-    
+    let dna_open_subscriber (uid:string) (host:string) (port:int) (user:string) (sub:string)=
+        match rtd.RtdKdb.subscriberMaps.ContainsKey uid with
+        | false -> 
+              let con = rtd.RtdKdb.kdb_subscriber(uid,host,port,user,sub)
+              rtd.RtdKdb.subscriberMaps.Add(uid,con)               
+        | true -> rtd.RtdKdb.subscriberMaps.[uid] <- rtd.RtdKdb.kdb_subscriber(uid,host,port,user,sub)                                       
+        
         uid
 
-    [<ExcelFunction(Description="subscribe to table and sym")>]
-    let subscribe (uid:string) (table:string) (sym:string) =
-        let s = subscriberMaps.Item uid
-        s.sub(table,sym)
-        FsAsyncUtil.excelObserve "subscribe" [|uid; table;sym|] (s.onEvent |> Observable.map (fun x -> 1 :> obj) )
 
-    [<ExcelFunction(Description="call manually")>]
-    let mcall (uid:string) =
-        let s = subscriberMaps.Item uid
-        s.k() |> ktox 
+    [<ExcelFunction(Description="subscribe to table and sym")>]
+    let dna_subscribe (uid:string) =
+        let r = XlCall.RTD("rtdkdb.rtdkdbserver","",uid)
+        match rtd.RtdKdb.objMaps.ContainsKey uid with
+        | true -> rtd.RtdKdb.objMaps.[uid]
+        | false -> r 
+
+    [<ExcelFunction(Description="Provides a ticking clock")>]
+    let dna_rtd(progId:string) (server:string) (topic:string)=
+        XlCall.RTD(progId,server,topic)
+        
     
         
 

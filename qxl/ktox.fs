@@ -135,7 +135,7 @@ let rec conv_as_matrix0(k:KObject) =
 
 let ktox( k:KObject) =
     match k with
-    | ERROR -> raise (KException("Error in ktox"))
+    | ERROR -> "Error in ktox" :> obj
     | TODO -> raise (KException("TODO in ktox"))
     | NULL -> raise (KException("Null in ktox"))
     | Bool(x) -> Bool(x)|> conv_as_obj0

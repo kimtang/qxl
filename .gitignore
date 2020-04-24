@@ -7,3 +7,5 @@ qxl/Properties
 *.sublime-project
 *.sublime-workspace
 qxl/main.fsx
+Samples
+qxl/*.fsx

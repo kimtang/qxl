@@ -55,8 +55,8 @@
     <None Include="qxl-AddIn.dna" />
     <Compile Include="c.fs" />
     <Compile Include="ktox.fs" />
+    <Compile Include="rtd.fs" />
     <Compile Include="qxl.fs" />
-    <None Include="main.fsx" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="ExcelDna.Integration">

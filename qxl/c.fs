@@ -768,6 +768,7 @@ type c(h:string,p:int,u:string,maxBufferSize:int) =
     new(h:string,p:int,u:string) = new c(h,p,u,65536)
     member o.close() = s.Close()
     member o.gvt() = vt
+    member o.Connected() = connect.Connected
 
 
 
