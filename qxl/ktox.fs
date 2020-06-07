@@ -3,29 +3,76 @@ module ktox
 
 open kx
 
+let Timestamp_null = System.DateTime.Parse("22/09/1707 00:12:43")
+let Month_null = System.DateTime.Parse("01/01/0001 00:00:00")
+let Date_null = System.DateTime.Parse("01/01/0001 00:00:00")
+let DateTime_null = System.DateTime.Parse("01/01/0001 00:00:00")
+let KTimespan_null = System.TimeSpan.Parse("-106751.23:47:16.8547758")
+let Minute_null = System.TimeSpan.Parse("-1491308.02:08:00")
+let Second_null = System.TimeSpan.Parse("-03:14:08")
+let TimeSpan_null = System.TimeSpan.Parse("-24.20:31:23.6480000")
+let nullObj = "" :> obj
+
+let isNullShort x = if x = -32768s then nullObj else  x |> float :> obj
+let isNullInt x = if x = -2147483648 then nullObj else  x |> float :> obj
+let isNullLong x = if x = -9223372036854775808L then nullObj else  x |> float :> obj
+let isNullReal x = if System.Single.IsNaN(x) then nullObj else  x |> float :> obj
+let isNullFloat x = if System.Double.IsNaN(x) then nullObj else  x :> obj
+let isNullChar x = if x.Equals(' ') then nullObj else  x |> string :> obj
+let isNullString x = if x.Equals("") then nullObj else  x :> obj 
+let isNullTimestamp (x:System.DateTime) = if x.Ticks = 538589095631452241L then nullObj else  x :> obj
+let isNullMonth x = if x = Month_null then nullObj else  x :> obj
+let isNullDate x = if x = Date_null  then nullObj else  x :> obj
+let isNullDateTime x = if x = DateTime_null  then nullObj else  x :> obj
+let isNullKTimespan x = if x = KTimespan_null  then nullObj else  x.TotalDays :> obj
+let isNullMinute x = if x = Minute_null  then nullObj else  x.TotalDays :> obj
+let isNullSecond x = if x = Second_null  then nullObj else  x.TotalDays :> obj
+let isNullTimeSpan x = if x = TimeSpan_null  then nullObj else  x.TotalDays :> obj
+
+
+let is_nan(k:KObject) = 
+    match k with
+    | Guid(x) -> x.Equals(System.Guid.Empty)
+    | Short(x) -> x = -32768s
+    | Int(x) -> x = -2147483648
+    | Long(x) -> x = -9223372036854775808L
+    | Real(x) -> System.Single.IsNaN(x)
+    | Float(x) -> System.Double.IsNaN(x)
+    | Char(x) -> x.Equals(' ')
+    | String(x) -> x.Equals("")
+    | Timestamp(x) -> x.Ticks = 538589095631452241L 
+    | Month(x) -> x.Equals(Month_null)
+    | Date(x) -> x.Equals(Date_null)
+    | DateTime(x) -> x.Equals(DateTime_null)
+    | KTimespan(x) -> x.Equals(KTimespan_null)
+    | Minute(x) -> x.Equals(Minute_null)
+    | Second(x) -> x.Equals(Second_null)
+    | TimeSpan(x) -> x.Equals(TimeSpan_null)
+    | _ -> false
+
 let conv_as_obj0(k:KObject) = 
     match k with
-    | ERROR -> raise (KException("Error in conv_as_obj0"))
+    | ERROR(x) -> "'"+x :> obj
     | TODO -> raise (KException("TODO in conv_as_obj0"))
     | NULL -> raise (KException("Null in conv_as_obj0"))
     | Bool(x) -> x :> obj
     | Guid(x) -> x |> string :> obj
     | Byte(x) -> x |> float :> obj
-    | Short(x) -> x |> float :> obj 
-    | Int(x) -> x |> float :> obj
-    | Long(x) -> x |> float :> obj
-    | Real(x) -> x |> float :> obj
-    | Float(x) -> x :> obj
-    | Char(x) -> x |> string :> obj
-    | String(x) -> "`"+x :> obj 
-    | Timestamp(x) -> x :> obj
-    | Month(x) -> x :> obj
-    | Date(x) -> x :> obj
-    | DateTime(x) -> x :> obj
-    | KTimespan(x) -> x.TotalDays :> obj
-    | Minute(x) -> x.TotalDays :> obj
-    | Second(x) -> x.TotalDays :> obj
-    | TimeSpan(x) -> x.TotalDays :> obj
+    | Short(x) ->isNullShort x
+    | Int(x) ->isNullInt x
+    | Long(x) ->isNullLong x
+    | Real(x) ->isNullReal x
+    | Float(x) ->isNullFloat x
+    | Char(x) ->isNullChar x
+    | String(x) ->isNullString x
+    | Timestamp(x) ->isNullTimestamp x
+    | Month(x) ->isNullMonth x
+    | Date(x) ->isNullDate x
+    | DateTime(x) ->isNullDateTime x
+    | KTimespan(x) ->isNullKTimespan x
+    | Minute(x) ->isNullMinute x
+    | Second(x) ->isNullSecond x
+    | TimeSpan(x) ->isNullTimeSpan x
     | ABool(x) ->  ABool(x)  |> stringify :> obj
     | AByte(x) -> AByte(x) |> stringify :> obj
     | AGuid(x) -> AGuid(x) |> stringify :> obj
@@ -54,40 +101,42 @@ let conv_as_array1(k:KObject) =
     | Bool(x) -> x :> obj |> Array.create 1
     | Guid(x) -> x |> string :> obj |> Array.create 1
     | Byte(x) -> x |> float :> obj |> Array.create 1
-    | Short(x) -> x |> float :> obj |> Array.create 1
-    | Int(x) -> x |> float :> obj |> Array.create 1
-    | Long(x) -> x |> float :> obj |> Array.create 1
-    | Real(x) -> x |> float :> obj |> Array.create 1
-    | Float(x) -> x :> obj |> Array.create 1
-    | Char(x) -> x |> string :> obj |> Array.create 1
-    | String(x) -> "`"+x :> obj |> Array.create 1
-    | Timestamp(x) -> x :> obj |> Array.create 1
-    | Month(x) -> x :> obj |> Array.create 1
-    | Date(x) -> x :> obj |> Array.create 1
-    | DateTime(x) -> x :> obj |> Array.create 1
-    | KTimespan(x) -> x.TotalDays :> obj |> Array.create 1
-    | Minute(x) -> x.TotalDays :> obj |> Array.create 1
-    | Second(x) -> x.TotalDays :> obj |> Array.create 1
-    | TimeSpan(x) -> x.TotalDays :> obj |> Array.create 1
+
+    | Short(x) -> x |> isNullShort  |> Array.create 1
+    | Int(x) -> x |> isNullInt  |> Array.create 1
+    | Long(x) -> x |> isNullLong  |> Array.create 1
+    | Real(x) -> x |> isNullReal  |> Array.create 1
+    | Float(x) -> x |> isNullFloat  |> Array.create 1
+    | Char(x) -> x |> isNullChar  |> Array.create 1
+    | String(x) -> x |> isNullString  |> Array.create 1
+    | Timestamp(x) -> x |> isNullTimestamp  |> Array.create 1
+    | Month(x) -> x |> isNullMonth  |> Array.create 1
+    | Date(x) -> x |> isNullDate  |> Array.create 1
+    | DateTime(x) -> x |> isNullDateTime  |> Array.create 1
+    | KTimespan(x) -> x |> isNullKTimespan  |> Array.create 1
+    | Minute(x) -> x |> isNullMinute  |> Array.create 1
+    | Second(x) -> x |> isNullSecond  |> Array.create 1
+    | TimeSpan(x) -> x |> isNullTimeSpan  |> Array.create 1
         
     | ABool(x) -> x |> Array.map (fun x -> x :> obj) 
     | AGuid(x) -> x |> Array.map (fun x -> x |> string :> obj) 
     | AByte(x) -> x |> Array.map (fun x -> x |> float :> obj) 
-    | AShort(x) -> x |> Array.map (fun x -> x |> float :> obj) 
-    | AInt(x) -> x |> Array.map (fun x -> x |> float :> obj) 
-    | ALong(x) -> x |> Array.map (fun x -> x |> float :> obj) 
-    | AReal(x) -> x |> Array.map (fun x -> x |> float :> obj) 
-    | AFloat(x) -> x |> Array.map (fun x -> x |> float :> obj) 
-    | AChar(x) -> x |> Array.map (fun x -> x |> string :> obj) 
-    | AString(x) -> x |> Array.map (fun x -> x :> obj) 
-    | ATimestamp(x) -> x |> Array.map (fun x -> x :> obj) 
-    | AMonth(x) -> x |> Array.map (fun x -> x :> obj) 
-    | ADate(x) -> x |> Array.map (fun x -> x :> obj) 
-    | ADateTime(x) -> x |> Array.map (fun x -> x :> obj) 
-    | AKTimespan(x) -> x |> Array.map (fun x -> x.TotalDays :> obj) 
-    | AMinute(x) -> x |> Array.map (fun x -> x.TotalDays :> obj) 
-    | ASecond(x) -> x |> Array.map (fun x -> x.TotalDays :> obj) 
-    | ATimeSpan(x) -> x |> Array.map (fun x -> x.TotalDays :> obj) 
+    | AShort(x) -> x |> Array.map isNullShort 
+    | AInt(x) -> x |> Array.map isNullInt 
+    | ALong(x) -> x |> Array.map isNullLong 
+    | AReal(x) -> x |> Array.map isNullReal 
+    | AFloat(x) -> x |> Array.map isNullFloat 
+    | AChar(x) -> x |> Array.map isNullChar 
+    | AString(x) -> x |> Array.map isNullString 
+    | ATimestamp(x) -> x |> Array.map isNullTimestamp 
+    | AMonth(x) -> x |> Array.map isNullMonth 
+    | ADate(x) -> x |> Array.map isNullDate 
+    | ADateTime(x) -> x |> Array.map isNullDateTime 
+    | AKTimespan(x) -> x |> Array.map isNullKTimespan 
+    | AMinute(x) -> x |> Array.map isNullMinute 
+    | ASecond(x) -> x |> Array.map isNullSecond 
+    | ATimeSpan(x) -> x |> Array.map isNullTimeSpan 
+
     | AKObject(x) -> x |> List.map conv_as_obj0 |> List.toArray
     | Dict(x,y) -> Dict(x,y) |> stringify :> obj |> Array.create 1 
     | Flip(x,y) -> Flip(x,y) |> stringify :> obj |> Array.create 1 
@@ -135,7 +184,7 @@ let rec conv_as_matrix0(k:KObject) =
 
 let ktox( k:KObject) =
     match k with
-    | ERROR -> "Error in ktox" :> obj
+    | ERROR(x) -> "'" + x :> obj
     | TODO -> raise (KException("TODO in ktox"))
     | NULL -> raise (KException("Null in ktox"))
     | Bool(x) -> Bool(x)|> conv_as_obj0

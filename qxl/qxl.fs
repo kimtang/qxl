@@ -81,7 +81,7 @@ module qxl =
         new Dictionary<string,kx.c>()
 
     [<ExcelFunction(Description="My first .NET function")>]
-    let dna_escribe (arg:obj) =
+    let dna_describe (arg:obj) =
         match arg with
         | :? System.DateTime as o-> "DateTime"
         | :? ExcelEmpty as o-> "ExcelEmpty"
@@ -97,20 +97,54 @@ module qxl =
 
     [<ExcelFunction(Description="open connection")>]
     let dna_open_connection (uid:string) (host:string) (port:int) (user:string) =
-        let con = match connectionMaps.ContainsKey uid with
-                  | false -> 
-                        let con = kx.c(host,port,user)
-                        connectionMaps.Add(uid,con)
-                        con
-                  | true -> let con = connectionMaps.Item uid
-                            match con.Connected() with
-                            | true -> con
-                            | false -> connectionMaps.Remove uid |> ignore
-                                       let con = kx.c(host,port,user)
-                                       connectionMaps.Add(uid,con)
-                                       con
+        match port with
+        | 0 -> ExcelMissing :> obj
+        | _ ->
+
+            let con =   match connectionMaps.ContainsKey uid with
+                        | false ->  let con = kx.c(host,port,user)
+                                // | ex -> raise (new XlCallException(XlCall.XlReturn.XlReturnFailed)
+                                    connectionMaps.Add(uid,con)
+                                    con
+
+                        | true ->   let con = connectionMaps.Item uid
+                                    match con.Connected() with
+                                    | true -> con
+                                    | false ->  connectionMaps.Remove uid |> ignore
+                                                let con = kx.c(host,port,user)
+                                                connectionMaps.Add(uid,con)
+                                                con
         
-        uid
+            uid :> obj
+
+
+    let async_open_connection (uid:string) (host:string) (port:int) (user:string) =
+        let on_event = new Event<obj>()
+        async {
+            let uid = match port with
+                      | 0 -> ExcelMissing :> obj
+                      | _ ->
+                             match connectionMaps.ContainsKey uid with
+                             | false -> 
+                                          let con = kx.c(host,port,user)
+                                          connectionMaps.Add(uid,con)
+                                          uid :> obj
+                             | true -> let con = connectionMaps.Item uid
+                                       match con.Connected() with
+                                       | true -> uid :> obj
+                                                 
+                                       | false -> connectionMaps.Remove uid |> ignore
+                                                  let con = kx.c(host,port,user)
+                                                  connectionMaps.Add(uid,con)
+                                                  uid :> obj      
+
+            on_event.Trigger(uid)
+        } |> Async.Start
+        on_event.Publish
+
+    [<ExcelFunction(Description="async execute query")>]
+    let dna_aopen_connection (uid:string) (host:string) (port:int) (user:string) = 
+        FsAsyncUtil.excelObserve "async_open_connection" [|uid :> obj; host :> obj; port :> obj; user :> obj |] (async_open_connection uid host port user )
 
     [<ExcelFunction(Description="execute query")>]
     let dna_execute (random:float) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
@@ -184,19 +218,23 @@ module qxl =
     // Excel function to start the timer - using the fact that F# events implement IObservable
     [<ExcelFunction(Description="start timer")>]
     let dna_startTimer timerInterval timerDuration =
-        
         FsAsyncUtil.excelObserve "startTimer" [|float timerInterval; float timerDuration|] (createTimer timerInterval timerDuration)
 
 
     [<ExcelFunction(Description="Create subscriber")>]
     let dna_open_subscriber (uid:string) (host:string) (port:int) (user:string) (sub:string)=
-        match rtd.RtdKdb.subscriberMaps.ContainsKey uid with
-        | false -> 
-              let con = rtd.RtdKdb.kdb_subscriber(uid,host,port,user,sub)
-              rtd.RtdKdb.subscriberMaps.Add(uid,con)               
-        | true -> rtd.RtdKdb.subscriberMaps.[uid] <- rtd.RtdKdb.kdb_subscriber(uid,host,port,user,sub)                                       
+        match port with
+        | 0 -> ExcelMissing :> obj
+        | _ ->
+            match rtd.RtdKdb.subscriberMaps.ContainsKey uid with
+            | false ->
+                  let con = rtd.RtdKdb.kdb_subscriber(uid,host,port,user,sub)
+                  rtd.RtdKdb.subscriberMaps.Add(uid,con)               
+            | true ->
+                  rtd.RtdKdb.subscriberMaps.[uid].Close()
+                  rtd.RtdKdb.subscriberMaps.[uid] <- rtd.RtdKdb.kdb_subscriber(uid,host,port,user,sub)
+            uid :> obj
         
-        uid
 
 
     [<ExcelFunction(Description="subscribe to table and sym")>]

@@ -9,3 +9,4 @@ qxl/Properties
 qxl/main.fsx
 Samples
 qxl/*.fsx
+slave.q

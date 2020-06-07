@@ -51,7 +51,7 @@ module RtdKdb =
 
     type kdb_subscriber(uid:string,host:string,port:int,user:string,sub:string) = 
         let uid,host,port,user,sub = uid,host,port,user,sub
-        let mutable connection = kx.c(host,port,user)
+        let mutable connection:Option<kx.c> = None // kx.c(host,port,user)
         let mutable callback:(string*kx.KObject -> unit) = (fun (x,y) -> ())
         let mutable inSub = false
         
@@ -61,7 +61,7 @@ module RtdKdb =
                         let! replyChannel = inbox.Receive();
                         // Delay so that the responses come in a different order.
                         //do! Async.Sleep( 5000 - 1000 * n);
-                        let o = connection.k()
+                        let o = connection.Value.k()
                         let o = match o with
                                 | kx.KObject.AKObject(x) -> x.[2]
                                 | _ -> o
@@ -90,11 +90,21 @@ module RtdKdb =
         member this.Uid = uid
         member this.loop() = if inSub then ()
                              else
-                                connection.ks(sub)
+                                connection <- Some(kx.c(host,port,user))
+                                connection.Value.ks(sub)
                                 outerloop()
         member this.Desc 
             with get() = (uid,host,port,user,sub)
-        member this.Connected = connection.Connected
+        member this.Connected =
+            match connection with
+            | Some(c) -> c.Connected()
+            | None -> false
+
+        member this.Close() =
+            match connection with
+            | Some(c) -> c.close()
+            | None -> ()
+
 
     // let subscriberMaps = new Dictionary<string,kx.c>()
     let subscriberMaps = Dictionary<string,kdb_subscriber>()

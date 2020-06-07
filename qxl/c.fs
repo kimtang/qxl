@@ -43,7 +43,7 @@ let ftoKDate (d:DateTime) =
 let ftoKMonth(x:System.DateTime) = (x.Year - 2000) * 12 + x.Month - 1
 
 type KObject =
-    | ERROR
+    | ERROR of string
     | TODO
     | NULL
     | Bool of bool
@@ -166,7 +166,7 @@ let t(k:KObject) =
     | Flip(_,_) -> 98
     | Dict(_,_) -> 99
     | AKObject (_) -> 0
-    | ERROR -> raise (KException("ERROR in t"))
+    | ERROR(s) -> raise (KException(s))
     | TODO -> raise (KException("TODO in t"))
     | NULL -> raise (KException("NULL in t"))
 
@@ -211,7 +211,7 @@ let rec n(k:KObject) =
     | Flip(x,y) -> n y.[0]
     | Dict(x,y) -> n x
     | AKObject (x) -> List.length x
-    | ERROR -> raise (KException("ERROR in n"))
+    | ERROR(x) -> raise (KException(x))
     | TODO -> raise (KException("TODO in n"))
     | NULL -> raise (KException("NULL in n"))
 
@@ -261,7 +261,7 @@ let rec nx k =
     | Flip(x,y) -> 3 + nx(AString(x)) + nx(AKObject(y))
     | Dict(x,y) -> 1 + nx(x) + nx(y)
     | AKObject(x) -> x |> List.map nx |> List.fold (+) 6
-    | ERROR -> raise(KException("unknown error"))
+    | ERROR(x) -> raise(KException(x))
     | NULL -> raise(KException("unknown error"))
     | TODO -> raise(KException("unknown todo"))
 
@@ -271,6 +271,7 @@ let rec stringify (r:KObject) =
         | true -> "1"
         | false -> "0"
     match r with
+    | ERROR(x) -> "'" + x
     | Bool(x) -> match x with
                     | true -> "1b"
                     | false -> "0b"
@@ -482,7 +483,7 @@ type serialize(n,vt) =
         | AKObject(y)-> x.w(0uy);x.w(y.Length); y  |> List.iter x.w
         | Dict(y,z) -> x.w(y); x.w(z);        
         | Flip(y,z) -> x.w(0uy);x.w(99uy);x.w(AString(y)); x.w(AKObject(z));
-        | ERROR -> raise(KException("unknown error"))
+        | ERROR(x) -> raise(KException(x))
         | NULL -> raise(KException("unknown error"))
         | TODO -> raise(KException("unknown todo"))
 
@@ -662,8 +663,8 @@ type deserialize(s:System.Net.Sockets.NetworkStream) =
                  match r() with
                  | Dict(x,y) -> match x,y with
                                 | AString(x),AKObject(y) -> Flip(x,y)
-                                | _,_ -> ERROR
-                 | _ -> ERROR
+                                | _,_ -> ERROR("error in kx.r")
+                 | _ -> ERROR("error in kx.r")
         |   0 -> jp();AKObject((fun i -> r()) |> List.init (ri())  )
         |   1 -> jp();ABool( (fun i -> rb()) |> Array.init (ri()) )
         |   2 -> jp();AGuid( (fun i -> rg()) |> Array.init (ri()) )
@@ -717,8 +718,9 @@ type deserialize(s:System.Net.Sockets.NetworkStream) =
                 (fun i -> ri()) |> Array.init (ri())
                                 |> Array.map (fun x -> new System.TimeSpan((x|>int64) * 10000L))
                                 |> (fun x-> ATimeSpan(x))
+        | -128 -> ERROR( rs())
         | t when t>99 -> if (t = 101 && gb()=0uy) then NULL else raise(KException("func"))
-        | _ -> ERROR                        
+        | _ -> ERROR("Error in kx.r")
 
     member x.k() =
         read 8
@@ -733,6 +735,7 @@ type deserialize(s:System.Net.Sockets.NetworkStream) =
 
 type c(h:string,p:int,u:string,maxBufferSize:int) =
     let connect = new System.Net.Sockets.TcpClient(h,p)
+
     let s = 
         let s = connect.GetStream()
         e.GetBytes([|'\003'; '\000'|])|> fun t -> s.Write(t,0,t.Length)
