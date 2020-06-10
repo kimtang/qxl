@@ -178,9 +178,59 @@ let rec conv_as_matrix0(k:KObject) =
         let yc = y |> List.map conv_as_array1  |> List.toArray
         // get the size an merge it together
         let r = xs |> Array.zip yc |> Array.map (fun (x,y) -> x |> Array.append y)
-        r
+        let twoDimensionalArray = Array2D.init r.[0].Length r.Length  (fun i j -> r.[j].[i])
+        // twoDimensionalArray
+        [| for x in 0 .. Array2D.length1 twoDimensionalArray - 1 do
+            yield [| for y in 0 .. Array2D.length2 twoDimensionalArray - 1 -> twoDimensionalArray.[x, y] |]
+         |]
+        
     | _ -> raise (KException("Error in conv_as_matrix0"))
 
+let rec conv_as_matrix1(k:KObject) = 
+    match k with    
+    | ABool(x) -> ABool(x) |> conv_as_array1 |> Array.create 1
+    | AGuid(x) -> AGuid(x) |> conv_as_array1 |> Array.create 1
+    | AByte(x) -> AByte(x) |> conv_as_array1 |> Array.create 1
+    | AShort(x) -> AShort(x) |> conv_as_array1 |> Array.create 1
+    | AInt(x) -> AInt(x) |> conv_as_array1 |> Array.create 1
+    | ALong(x) -> ALong(x) |> conv_as_array1 |> Array.create 1
+    | AReal(x) -> AReal(x) |> conv_as_array1 |> Array.create 1
+    | AFloat(x) -> AFloat(x) |> conv_as_array1 |> Array.create 1
+    | AChar(x) -> AChar(x) |> conv_as_array1 |> Array.create 1
+    | AString(x) -> AString(x) |> conv_as_array1 |> Array.create 1
+    | ATimestamp(x) -> ATimestamp(x) |> conv_as_array1 |> Array.create 1
+    | AMonth(x) -> AMonth(x) |> conv_as_array1 |> Array.create 1
+    | ADate(x) -> ADate(x) |> conv_as_array1 |> Array.create 1
+    | ADateTime(x) -> ADateTime(x) |> conv_as_array1 |> Array.create 1
+    | AKTimespan(x) -> AKTimespan(x) |> conv_as_array1 |> Array.create 1
+    | AMinute(x) -> AMinute(x) |> conv_as_array1 |> Array.create 1
+    | ASecond(x) -> ASecond(x) |> conv_as_array1 |> Array.create 1
+    | ATimeSpan(x) -> ATimeSpan(x) |> conv_as_array1 |> Array.create 1
+    | AKObject(x) -> let r = x |> List.map conv_as_array1 |> List.toArray
+                     let m = r |> Array.map Array.length |> Array.max
+                     let r = r |> Array.map (fun x -> ("":>obj) |> Array.create (m - Array.length x)  |> Array.append x )
+                     r 
+
+    | Dict(x,y) -> // hmmm, again a dict in 
+        let xc = conv_as_matrix1 x
+        let yc = conv_as_matrix1 y
+        let yc = match yc.Length with
+                 | 1 -> yc
+                 | _ -> [|for i in 1 .. yc.[0].Length -> [| for j in 1 .. yc.Length -> yc.[j - 1].[i - 1] |] |]
+        let r = yc |> Array.append xc 
+        r
+    | Flip(x,y) ->
+        let xs = x |> Array.map (fun x -> [|x :> obj|]) 
+        let yc = y |> List.map conv_as_array1  |> List.toArray
+        // get the size an merge it together
+        let r = xs |> Array.zip yc |> Array.map (fun (x,y) -> x |> Array.append y)
+        let twoDimensionalArray = Array2D.init r.[0].Length r.Length  (fun i j -> r.[j].[i])
+        // twoDimensionalArray
+        [| for x in 0 .. Array2D.length1 twoDimensionalArray - 1 do
+            yield [| for y in 0 .. Array2D.length2 twoDimensionalArray - 1 -> twoDimensionalArray.[x, y] |]
+         |]
+        
+    | _ -> raise (KException("Error in conv_as_matrix1"))
 
 let ktox( k:KObject) =
     match k with
@@ -224,17 +274,25 @@ let ktox( k:KObject) =
     | ASecond(x) -> ASecond(x) |> conv_as_array1  :> obj
     | ATimeSpan(x) -> ATimeSpan(x) |> conv_as_array1  :> obj
     | Dict(x,y) -> 
-        let xc = conv_as_matrix0 x
-        let yc = conv_as_matrix0 y
-        let yc = match yc.Length with
-                 | 1 -> yc
-                 | _ -> [|for i in 1 .. yc.[0].Length -> [| for j in 1 .. yc.Length -> yc.[j - 1].[i - 1] |] |]
-        // let yc2 = Array2D.init r.[0].Length r.Length (fun i j -> r.[j].[i])
-        // let r = yc |> Array.zip xc |> Array.map (fun (x,y) -> y |> Array.append x)
-        let r = yc |> Array.append xc 
-        // let m = r |> Array.map (fun x -> x.Length) |> Array.max
-        let twoDimensionalArray = Array2D.init r.[0].Length r.Length   (fun i j -> r.[j].[i])
-        twoDimensionalArray :> obj
+        match x with 
+        | Flip(a,b) ->
+            let xc = conv_as_matrix0 x
+            let yc = conv_as_matrix0 y        
+            let r = yc |> Array.zip xc |> Array.map (fun (x,y) -> Array.append x y)
+            let twoDimensionalArray = Array2D.init r.Length r.[0].Length    (fun i j -> r.[i].[j])
+            twoDimensionalArray :> obj
+        | _ ->
+            let xc = conv_as_matrix0 x
+            let yc = conv_as_matrix1 y
+            let yc = match yc.Length with
+                     | 1 -> yc
+                     | _ -> [|for i in 1 .. yc.[0].Length -> [| for j in 1 .. yc.Length -> yc.[j - 1].[i - 1] |] |]
+            // let yc2 = Array2D.init r.[0].Length r.Length (fun i j -> r.[j].[i])
+            // let r = yc |> Array.zip xc |> Array.map (fun (x,y) -> y |> Array.append x)
+            let r = yc |> Array.append xc 
+            // let m = r |> Array.map (fun x -> x.Length) |> Array.max
+            let twoDimensionalArray = Array2D.init r.[0].Length r.Length   (fun i j -> r.[j].[i])
+            twoDimensionalArray :> obj
 
     | Flip(x,y) -> 
         let xs = x |> Array.map (fun x -> [|x :> obj|]) 
