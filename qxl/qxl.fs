@@ -96,13 +96,13 @@ module qxl =
 
 
     [<ExcelFunction(Description="open connection")>]
-    let dna_open_connection (uid:string) (host:string) (port:int) (user:string) =
+    let dna_open_connection (uid:string) (host:string) (port:int) (user:string) (passwd:string)=
         match port with
         | 0 -> ExcelMissing :> obj
         | _ ->
 
             let con =   match connectionMaps.ContainsKey uid with
-                        | false ->  let con = kx.c(host,port,user)
+                        | false ->  let con = kx.c(host,port,user+":"+passwd)
                                 // | ex -> raise (new XlCallException(XlCall.XlReturn.XlReturnFailed)
                                     connectionMaps.Add(uid,con)
                                     con
@@ -111,7 +111,7 @@ module qxl =
                                     match con.Connected() with
                                     | true -> con
                                     | false ->  connectionMaps.Remove uid |> ignore
-                                                let con = kx.c(host,port,user)
+                                                let con = kx.c(host,port,user+":"+passwd)
                                                 connectionMaps.Add(uid,con)
                                                 con
         

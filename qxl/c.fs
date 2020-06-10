@@ -735,10 +735,23 @@ type deserialize(s:System.Net.Sockets.NetworkStream) =
 
 type c(h:string,p:int,u:string,maxBufferSize:int) =
     let connect = new System.Net.Sockets.TcpClient(h,p)
+    
+    // public c(string h,int p,string u,int maxBufferSize=DefaultMaxBufferSize,bool useTLS=false){
+    // _maxBufferSize=maxBufferSize;
+    // Connect(h,p);
+    // s=this.GetStream();
+    // if(useTLS){s=new SslStream(s,false);((SslStream)s).AuthenticateAsClient(h);}
+    // B=new byte[2+u.Length];
+    // J=0;
+    // w(u+"\x3");
+    // s.Write(B,0,J);
+    // if(1!=s.Read(B,0,1))throw new KException("access");vt=Math.Min(B[0],(byte)3);}
+    // 
 
     let s = 
         let s = connect.GetStream()
-        e.GetBytes([|'\003'; '\000'|])|> fun t -> s.Write(t,0,t.Length)
+        // e.GetBytes([|'\003'; '\000'|])|> fun t -> s.Write(t,0,t.Length)
+        e.GetBytes(u+"\003"+"\000")|> fun t -> s.Write(t,0,t.Length)
         s
     let vt = 
         let b = Array.zeroCreate<byte>(1)
