@@ -101,19 +101,25 @@ module qxl =
         | 0 -> ExcelMissing :> obj
         | _ ->
 
-            let con =   match connectionMaps.ContainsKey uid with
-                        | false ->  let con = kx.c(host,port,user+":"+passwd)
-                                // | ex -> raise (new XlCallException(XlCall.XlReturn.XlReturnFailed)
-                                    connectionMaps.Add(uid,con)
-                                    con
+            let uid =   match connectionMaps.ContainsKey uid with
+                        | false ->  
+                                    try 
+                                        let con = kx.c(host,port,user+":"+passwd)                                    
+                                        connectionMaps.Add(uid,con)
+                                        uid
+                                    with
+                                    | ex -> "no_con" 
 
                         | true ->   let con = connectionMaps.Item uid
                                     match con.Connected() with
-                                    | true -> con
+                                    | true -> uid
                                     | false ->  connectionMaps.Remove uid |> ignore
-                                                let con = kx.c(host,port,user+":"+passwd)
-                                                connectionMaps.Add(uid,con)
-                                                con
+                                                try
+                                                    let con = kx.c(host,port,user+":"+passwd)
+                                                    connectionMaps.Add(uid,con)
+                                                    uid
+                                                with
+                                                | ex -> "no_con"
         
             uid :> obj
 
@@ -247,8 +253,3 @@ module qxl =
     [<ExcelFunction(Description="Provides a ticking clock")>]
     let dna_rtd(progId:string) (server:string) (topic:string)=
         XlCall.RTD(progId,server,topic)
-        
-    
-        
-
-
