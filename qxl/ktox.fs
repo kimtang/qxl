@@ -142,6 +142,51 @@ let conv_as_array1(k:KObject) =
     | Flip(x,y) -> Flip(x,y) |> stringify :> obj |> Array.create 1 
     | _ -> raise (KException("Error in conv_as_array1"))
 
+let conv_as_array2(k:KObject) = 
+    match k with
+    | Bool(x) -> x :> obj |> Array.create 1
+    | Guid(x) -> x |> string :> obj |> Array.create 1
+    | Byte(x) -> x |> float :> obj |> Array.create 1
+
+    | Short(x) -> x |> isNullShort  |> Array.create 1
+    | Int(x) -> x |> isNullInt  |> Array.create 1
+    | Long(x) -> x |> isNullLong  |> Array.create 1
+    | Real(x) -> x |> isNullReal  |> Array.create 1
+    | Float(x) -> x |> isNullFloat  |> Array.create 1
+    | Char(x) -> x |> isNullChar  |> Array.create 1
+    | String(x) -> x |> isNullString  |> Array.create 1
+    | Timestamp(x) -> x |> isNullTimestamp  |> Array.create 1
+    | Month(x) -> x |> isNullMonth  |> Array.create 1
+    | Date(x) -> x |> isNullDate  |> Array.create 1
+    | DateTime(x) -> x |> isNullDateTime  |> Array.create 1
+    | KTimespan(x) -> x |> isNullKTimespan  |> Array.create 1
+    | Minute(x) -> x |> isNullMinute  |> Array.create 1
+    | Second(x) -> x |> isNullSecond  |> Array.create 1
+    | TimeSpan(x) -> x |> isNullTimeSpan  |> Array.create 1
+        
+    | ABool(x) -> x |> Array.map (fun x -> x :> obj) 
+    | AGuid(x) -> x |> Array.map (fun x -> x |> string :> obj) 
+    | AByte(x) -> x |> Array.map (fun x -> x |> float :> obj) 
+    | AShort(x) -> x |> Array.map isNullShort 
+    | AInt(x) -> x |> Array.map isNullInt 
+    | ALong(x) -> x |> Array.map isNullLong 
+    | AReal(x) -> x |> Array.map isNullReal 
+    | AFloat(x) -> x |> Array.map isNullFloat 
+    | AChar(x) -> [|System.String(x) :> obj|]
+    | AString(x) -> x |> Array.map isNullString 
+    | ATimestamp(x) -> x |> Array.map isNullTimestamp 
+    | AMonth(x) -> x |> Array.map isNullMonth 
+    | ADate(x) -> x |> Array.map isNullDate 
+    | ADateTime(x) -> x |> Array.map isNullDateTime 
+    | AKTimespan(x) -> x |> Array.map isNullKTimespan 
+    | AMinute(x) -> x |> Array.map isNullMinute 
+    | ASecond(x) -> x |> Array.map isNullSecond 
+    | ATimeSpan(x) -> x |> Array.map isNullTimeSpan 
+
+    | AKObject(x) -> x |> List.map conv_as_obj0 |> List.toArray
+    | Dict(x,y) -> Dict(x,y) |> stringify :> obj |> Array.create 1 
+    | Flip(x,y) -> Flip(x,y) |> stringify :> obj |> Array.create 1 
+    | _ -> raise (KException("Error in conv_as_array2"))
 
 let rec conv_as_matrix0(k:KObject) = 
     match k with    
@@ -206,7 +251,7 @@ let rec conv_as_matrix1(k:KObject) =
     | AMinute(x) -> AMinute(x) |> conv_as_array1 |> Array.create 1
     | ASecond(x) -> ASecond(x) |> conv_as_array1 |> Array.create 1
     | ATimeSpan(x) -> ATimeSpan(x) |> conv_as_array1 |> Array.create 1
-    | AKObject(x) -> let r = x |> List.map conv_as_array1 |> List.toArray
+    | AKObject(x) -> let r = x |> List.map conv_as_array2 |> List.toArray
                      let m = r |> Array.map Array.length |> Array.max
                      let r = r |> Array.map (fun x -> ("":>obj) |> Array.create (m - Array.length x)  |> Array.append x )
                      r 
