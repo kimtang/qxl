@@ -25,7 +25,7 @@ module RtdClock =
         new() = RtdClockServer(null,null)
            
         override this.ServerStart() =
-            _timer <- new Timer(this.timer_tick,null,0,1000)
+            _timer <- new Timer(this.timer_tick,null,0,7000)
             _topics <- new List<ExcelRtdServer.Topic>()
             true
         override this.ServerTerminate() = 
