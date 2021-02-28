@@ -21,10 +21,9 @@
 .qxl.parse0[`t]:{"t"$ .qxl.parse0[`z]x }
 .qxl.parse0[`]:{x}
 
-string `a
 .qxl.t2d:{
  r:update w:(.qxl.parse0@/:k)@'v from flip `k`f`v!flip x;
- exec f!v from r
+ exec f!w from r
  }
 
 .qxl.t2t:{
