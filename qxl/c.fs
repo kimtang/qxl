@@ -716,7 +716,9 @@ type deserialize(s:System.Net.Sockets.NetworkStream) =
                                 |> Array.map (fun x -> new System.TimeSpan((x|>int64) * 10000L))
                                 |> (fun x-> ATimeSpan(x))
         | -128 -> ERROR( rs())
-        | t when t>99 -> if (t = 101 && gb()=0uy) then NULL else raise(KException("func"))
+        | 100 -> rs() |> ignore
+                 r()
+        | t when t>99 -> if (t = 101 && gb()=0uy) then NULL else ERROR("func")
         | _ -> ERROR("Error in kx.r")
 
     member x.k() =
