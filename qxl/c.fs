@@ -718,6 +718,7 @@ type deserialize(s:System.Net.Sockets.NetworkStream) =
         | -128 -> ERROR( rs())
         | 100 -> rs() |> ignore
                  r()
+        | t when t>105 -> r()
         | t when t>99 -> if (t = 101 && gb()=0uy) then NULL else ERROR("func")
         | _ -> ERROR("Error in kx.r")
 
