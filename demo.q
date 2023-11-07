@@ -4,9 +4,6 @@ args:.Q.def[`name`port!("name";8866);].Q.opt .z.x
 / name:localhost:8866::
 { if[not x=0; @[x;"\\\\";()]]; value"\\p 8866"; } @[hopen;`:localhost:8866;0];
 
-\l bt.q
-r) library(ggplot2)
-
 cons:flip `address`userid`handle`arg!()
 
 .z.po:{0N!"Port opened\n";0N!r:(.z.a;.z.u;.z.w;x);`cons insert r;}
@@ -15,10 +12,6 @@ cons:flip `address`userid`handle`arg!()
 .z.pg:{[x]0N!(`zpg;x);value x}
 
 .u.sub:{[x;y] .u.w:.z.w;.u.x:x;.u.y:y}
-
-/ (neg .u.w) ("upd";`abc;([]a:1 2 3;b:4 5 6))
-
-.bt.outputTrace:.bt.outputTrace1
 
 sym:`abc`acb`cab`bca
 
@@ -37,3 +30,5 @@ sym:`abc`acb`cab`bca
 (::)atoms:update data:(.z.p;`month$.z.p;`date$.z.p;`datetime$.z.p;`timespan$.z.p;`minute$.z.p;`second$.z.p;`time$.z.p;`sym?`abc) from atoms where t in 12 13 14 15 16 17 18 19 20
 
 (::)atoms:update ldata:3#/:data from atoms
+
+myfunc:{[a;b] `$ .Q.s1 (a;b) }
