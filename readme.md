@@ -11,7 +11,7 @@ With qxl you can query kdb+ and display the result in excel.
 
 Go to the [relase page](https://github.com/kimtang/qxl/releases) and install the add-in in excel. (Home-> More -> Options -> Add-ins -> Go -> Browse).
 
-![excel add-in!](pic/add-in.jpg "excel add-in")
+![excel add-in!](pic/add-in.png "excel add-in")
 
 ## Usage
 
@@ -35,4 +35,4 @@ $ q demo.q / it will point to port 8866 automatically
 ```
 
 2. Start excel sheet `demo.xlsx`.
-![excel screenshot!](pic/excel-screenshot.jpg "excel screenshot")
+![excel screenshot!](pic/excel-screenshot.png "excel screenshot")
