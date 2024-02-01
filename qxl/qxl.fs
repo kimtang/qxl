@@ -4,47 +4,7 @@ namespace qxl
 open System
 open System.Threading
 open ExcelDna.Integration
-
-/// Some utility functions for connecting Excel-DNA async with F#
-module FsAsyncUtil =
-    /// A helper to pass an F# Async computation to Excel-DNA 
-    let excelRunAsync functionName parameters async =
-        let obsSource =
-            ExcelObservableSource(
-                fun () -> 
-                { new IExcelObservable with
-                    member __.Subscribe observer =
-                        // make something like CancellationDisposable
-                        let cts = new CancellationTokenSource ()
-                        let disp = { new IDisposable with member __.Dispose () = cts.Cancel () }
-                        // Start the async computation on this thread
-                        Async.StartWithContinuations 
-                            (   async, 
-                                ( fun result -> 
-                                    observer.OnNext(result)
-                                    observer.OnCompleted () ),
-                                ( fun ex -> observer.OnError ex ),
-                                ( fun ex ->
-                                    observer.OnCompleted () ),
-                                cts.Token 
-                            )
-                        // return the disposable
-                        disp
-                }) 
-        ExcelAsyncUtil.Observe (functionName, parameters, obsSource)
-
-    /// A helper to pass an F# IObservable to Excel-DNA
-    let excelObserve functionName parameters observable = 
-        let obsSource =
-            ExcelObservableSource(
-                fun () -> 
-                { new IExcelObservable with
-                    member __.Subscribe observer =
-                        // Subscribe to the F# observable
-                        Observable.subscribe (fun value -> observer.OnNext (value)) observable
-                })
-        ExcelAsyncUtil.Observe (functionName, parameters, obsSource)
-            
+open ExcelDna.Registration.FSharp
 
 module qxl =
     open System.Collections.Generic
@@ -55,6 +15,8 @@ module qxl =
         | ExcelMissing
         | KObject of kx.KObject
 
+    type XType = | XExcelEmpty | XExcelError | XExcelMissing | XBool | XString | XFloat
+
     let xtok (arg:obj) = 
         match arg with
         | :? ExcelEmpty -> ExcelMissing
@@ -64,21 +26,92 @@ module qxl =
         | :? string as o-> KObject(kx.KObject.String(o))
         | :? float as o-> KObject(kx.KObject.Float(o))
         | :? (obj[,]) as o->
-                let r = o |> Array2D.map (fun y ->
-                                            match y with 
-                                            | :? ExcelEmpty -> kx.KObject.String("ExcelEmpty")
-                                            | :? ExcelError -> kx.KObject.String("ExcelError")
-                                            | :? ExcelMissing -> kx.KObject.String("ExcelMissing")
-                                            | :? bool as o-> kx.KObject.Bool(o)
-                                            | :? string as o-> kx.KObject.String(o)
-                                            | :? float as o-> kx.KObject.Float(o)
-                                            )
-                let s = [ for i in  0 .. r.GetLength(0) - 1 -> r.[i,*] ] |> List.map (fun x -> kx.KObject.AKObject(x |> Array.toList))
-                KObject(kx.KObject.AKObject(s))
+                let rcnt = o |> Array2D.length1
+                let lcnt = o |> Array2D.length2
+                match rcnt,lcnt with
+                | _,1  ->   let r= o[*,0] |> Array.map ( fun y -> 
+                                                            match y with
+                                                            | :? ExcelEmpty -> XExcelEmpty 
+                                                            | :? ExcelError -> XExcelError 
+                                                            | :? ExcelMissing -> XExcelMissing
+                                                            | :? bool as o-> XBool
+                                                            | :? string as o-> XString
+                                                            | :? float as o-> XFloat
+                                                            ) |> Array.distinct |> Array.length
+                            match r with
+                            | 1 ->  let oo = o[0,0]
+                                    let r = match oo with
+                                            | :? ExcelEmpty -> Array.create rcnt "ExcelEmpty" |> kx.KObject.AString
+                                            | :? ExcelError -> Array.create rcnt "ExcelError" |> kx.KObject.AString
+                                            | :? ExcelMissing -> Array.create rcnt "ExcelMissing" |> kx.KObject.AString 
+                                            | :? bool -> o[*,0] |> Array.map (fun x -> x :?> bool) |> kx.KObject.ABool
+                                            | :? string -> o[*,0] |> Array.map (fun x -> x :?> string) |> kx.KObject.AString
+                                            | :? float -> o[*,0] |> Array.map (fun x -> x :?> float) |> kx.KObject.AFloat
+                                    KObject(r)
+                            | _ -> let r = o[*,0] |> Array.map ( fun y -> 
+                                                            match y with
+                                                            | :? ExcelEmpty -> kx.KObject.String("ExcelEmpty")
+                                                            | :? ExcelError -> kx.KObject.String("ExcelError")
+                                                            | :? ExcelMissing -> kx.KObject.String("ExcelMissing")
+                                                            | :? bool as o-> kx.KObject.Bool(o)
+                                                            | :? string as o-> kx.KObject.String(o)
+                                                            | :? float as o-> kx.KObject.Float(o)
+                                                            )
+                                                  |> Array.toList
+                                                  |> kx.KObject.AKObject
+                                   KObject(r)
+                | 1,_  ->   let rr= o[0,*] 
+                            let r = rr |> Array.map ( fun y -> 
+                                                            match y with
+                                                            | :? ExcelEmpty -> XExcelEmpty 
+                                                            | :? ExcelError -> XExcelError 
+                                                            | :? ExcelMissing -> XExcelMissing
+                                                            | :? bool as o-> XBool
+                                                            | :? string as o-> XString
+                                                            | :? float as o-> XFloat
+                                                            ) |> Array.distinct |> Array.length
+                            match r with
+                            | 1 ->  let oo = o[0,0]
+                                    let r = match oo with
+                                            | :? ExcelEmpty -> Array.create rcnt "ExcelEmpty" |> kx.KObject.AString
+                                            | :? ExcelError -> Array.create rcnt "ExcelError" |> kx.KObject.AString
+                                            | :? ExcelMissing -> Array.create rcnt "ExcelMissing" |> kx.KObject.AString 
+                                            | :? bool -> o[0,*] |> Array.map (fun x -> x :?> bool) |> kx.KObject.ABool
+                                            | :? string -> o[0,*] |> Array.map (fun x -> x :?> string) |> kx.KObject.AString
+                                            | :? float -> o[0,*] |> Array.map (fun x -> x :?> float) |> kx.KObject.AFloat
+                                    KObject(r)
+                            | _ -> let r = o[0,*] |> Array.map ( fun y -> 
+                                                            match y with
+                                                            | :? ExcelEmpty -> kx.KObject.String("ExcelEmpty")
+                                                            | :? ExcelError -> kx.KObject.String("ExcelError")
+                                                            | :? ExcelMissing -> kx.KObject.String("ExcelMissing")
+                                                            | :? bool as o-> kx.KObject.Bool(o)
+                                                            | :? string as o-> kx.KObject.String(o)
+                                                            | :? float as o-> kx.KObject.Float(o)
+                                                            )
+                                                  |> Array.toList
+                                                  |> kx.KObject.AKObject
+                                   KObject(r)
+                | _,_  ->
+                        let r = o |> Array2D.map (fun y ->
+                                                        match y with 
+                                                        | :? ExcelEmpty -> kx.KObject.String("ExcelEmpty")
+                                                        | :? ExcelError -> kx.KObject.String("ExcelError")
+                                                        | :? ExcelMissing -> kx.KObject.String("ExcelMissing")
+                                                        | :? bool as o-> kx.KObject.Bool(o)
+                                                        | :? string as o-> kx.KObject.String(o)
+                                                        | :? float as o-> kx.KObject.Float(o)
+                                                        )
+                        let s = [ for i in  0 .. r.GetLength(0) - 1 -> r.[i,*] ] |> List.map (fun x -> kx.KObject.AKObject(x |> Array.toList))
+                        KObject(kx.KObject.AKObject(s))
         | _ -> KObject(kx.KObject.Bool(true))
 
     let connectionMaps =
         new Dictionary<string,kx.c>()
+
+    [<ExcelFunction(Description="My first .NET function")>]
+    let dna_connection(arg:obj) =
+        connectionMaps.Keys |> Seq.toArray :> obj
 
     [<ExcelFunction(Description="My first .NET function")>]
     let dna_describe (arg:obj) =
@@ -124,15 +157,14 @@ module qxl =
             uid :> obj
 
 
-    let async_open_connection (uid:string) (host:string) (port:int) (user:string) =
-        let on_event = new Event<obj>()
+    let async_open_connection (uid:string) (host:string) (port:int) (user:string) (passwd:string)=
         async {
             let uid = match port with
                       | 0 -> ExcelMissing :> obj
                       | _ ->
                              match connectionMaps.ContainsKey uid with
                              | false -> 
-                                          let con = kx.c(host,port,user)
+                                          let con = kx.c(host,port,user+":"+passwd)
                                           connectionMaps.Add(uid,con)
                                           uid :> obj
                              | true -> let con = connectionMaps.Item uid
@@ -140,20 +172,20 @@ module qxl =
                                        | true -> uid :> obj
                                                  
                                        | false -> connectionMaps.Remove uid |> ignore
-                                                  let con = kx.c(host,port,user)
+                                                  let con = kx.c(host,port,user+":"+passwd)
                                                   connectionMaps.Add(uid,con)
                                                   uid :> obj      
+            return uid
+        }
 
-            on_event.Trigger(uid)
-        } |> Async.Start
-        on_event.Publish
 
     [<ExcelFunction(Description="async execute query")>]
-    let dna_aopen_connection (uid:string) (host:string) (port:int) (user:string) = 
-        FsAsyncUtil.excelObserve "async_open_connection" [|uid :> obj; host :> obj; port :> obj; user :> obj |] (async_open_connection uid host port user )
+    let dna_aopen_connection (uid:string) (host:string) (port:int) (user:string) (passwd:string)= 
+        FsAsyncUtil.excelObserve "async_open_connection" [|uid :> obj; host :> obj; port :> obj; user :> obj ; passwd :> obj |]
+            (FsAsyncUtil.observeAsync (async_open_connection uid host port user passwd ))
 
     [<ExcelFunction(Description="execute query")>]
-    let dna_execute (random:float) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
+    let dna_execute (random:obj) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
         match connectionMaps.ContainsKey uid with
         | false -> "uid not found" :> obj
         | true -> let con = connectionMaps.Item uid
@@ -170,7 +202,6 @@ module qxl =
                   ktox r
 
     let asyncExecute (random) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
-        let on_event = new Event<obj>()
         async {
             let r = 
                 match connectionMaps.ContainsKey uid with
@@ -186,13 +217,13 @@ module qxl =
                                   | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b)-> con.k(query,x,y,z,a,b)
                                   // | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b),KObject(c)-> con.k(query,x,y,z,a,b,c)
                           ktox r
-            on_event.Trigger(r)
-        } |> Async.Start
-        on_event.Publish 
+            return r
+        }
 
     [<ExcelFunction(Description="async execute query")>]
-    let dna_axecute (random:float) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
-        FsAsyncUtil.excelObserve "asyncExecute" [|(random :> obj); (uid :> obj); (query :> obj); x; y; z; a; b |] (asyncExecute random uid query x y z a b )
+    let dna_axecute (random:obj) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
+        FsAsyncUtil.excelObserve "asyncExecute" [|random; (uid :> obj); (query :> obj); x; y; z; a; b |]
+            (FsAsyncUtil.observeAsync(asyncExecute random uid query x y z a b ))
         
 
     [<ExcelFunction(Description="execute query")>]
@@ -213,7 +244,7 @@ module qxl =
         // return an async task for stopping
         let timerStop = async {
             timer.Start()
-            do! Async.Sleep timerDuration
+            do! Async.Sleep (timerDuration |> int)
             timer.Stop() 
             }
         Async.Start timerStop
@@ -228,17 +259,17 @@ module qxl =
 
 
     [<ExcelFunction(Description="Create subscriber")>]
-    let dna_open_subscriber (uid:string) (host:string) (port:int) (user:string) (sub:string)=
+    let dna_open_subscriber (uid:string) (host:string) (port:int) (user:string) (passwd:string) (sub:string) (append:int)=
         match port with
         | 0 -> ExcelMissing :> obj
         | _ ->
             match rtd.RtdKdb.subscriberMaps.ContainsKey uid with
             | false ->
-                  let con = rtd.RtdKdb.kdb_subscriber(uid,host,port,user,sub)
+                  let con = rtd.RtdKdb.kdb_subscriber(uid,host,port,user+":"+passwd,sub,append)
                   rtd.RtdKdb.subscriberMaps.Add(uid,con)               
             | true ->
                   rtd.RtdKdb.subscriberMaps.[uid].Close()
-                  rtd.RtdKdb.subscriberMaps.[uid] <- rtd.RtdKdb.kdb_subscriber(uid,host,port,user,sub)
+                  rtd.RtdKdb.subscriberMaps.[uid] <- rtd.RtdKdb.kdb_subscriber(uid,host,port,user+":"+passwd,sub,append)
             uid :> obj
         
 

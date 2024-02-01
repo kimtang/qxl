@@ -7,27 +7,27 @@ let Timestamp_null = System.DateTime.Parse("22/09/1707 00:12:43")
 let Month_null = System.DateTime.Parse("01/01/0001 00:00:00")
 let Date_null = System.DateTime.Parse("01/01/0001 00:00:00")
 let DateTime_null = System.DateTime.Parse("01/01/0001 00:00:00")
-let KTimespan_null = System.TimeSpan.Parse("-106751.23:47:16.8547758")
+let KTimespan_null = new System.TimeSpan(-92233720368547758L)
 let Minute_null = System.TimeSpan.Parse("-1491308.02:08:00")
 let Second_null = System.TimeSpan.Parse("-03:14:08")
 let TimeSpan_null = System.TimeSpan.Parse("-24.20:31:23.6480000")
 let nullObj = "" :> obj
 
-let isNullShort x = if x = -32768s then nullObj else  x |> float :> obj
-let isNullInt x = if x = -2147483648 then nullObj else  x |> float :> obj
-let isNullLong x = if x = -9223372036854775808L then nullObj else  x |> float :> obj
-let isNullReal x = if System.Single.IsNaN(x) then nullObj else  x |> float :> obj
-let isNullFloat x = if System.Double.IsNaN(x) then nullObj else  x :> obj
-let isNullChar x = if x.Equals(' ') then nullObj else  x |> string :> obj
-let isNullString x = if x.Equals("") then nullObj else  x :> obj 
-let isNullTimestamp (x:System.DateTime) = if x.Ticks = 538589095631452241L then nullObj else  x :> obj
-let isNullMonth x = if x = Month_null then nullObj else  x :> obj
-let isNullDate x = if x = Date_null  then nullObj else  x :> obj
-let isNullDateTime x = if x = DateTime_null  then nullObj else  x :> obj
-let isNullKTimespan x = if x = KTimespan_null  then nullObj else  x.TotalDays :> obj
-let isNullMinute x = if x = Minute_null  then nullObj else  x.TotalDays :> obj
-let isNullSecond x = if x = Second_null  then nullObj else  x.TotalDays :> obj
-let isNullTimeSpan x = if x = TimeSpan_null  then nullObj else  x.TotalDays :> obj
+let isNullShort (x:int16) = if x = -32768s then ("0nh" :> obj) else  x |> float :> obj
+let isNullInt (x:int) = if x = -2147483648 then ("0ni" :> obj) else  x |> float :> obj
+let isNullLong (x:int64) = if x = -9223372036854775808L then ("0nj" :> obj) else  x |> float :> obj
+let isNullReal (x:single) = if System.Single.IsNaN(x) then ("0ne" :> obj) else  x |> float :> obj
+let isNullFloat (x:double) = if System.Double.IsNaN(x) then ("0nf" :> obj) else  x :> obj
+let isNullChar (x:char) = if x.Equals(' ') then (" " :> obj) else  x |> string :> obj
+let isNullString (x:string) = if x.Equals("") then ("" :> obj) else  x :> obj 
+let isNullTimestamp (x:System.DateTime) = if x.Ticks = 538589095631452241L then ("0np" :> obj) else  x :> obj
+let isNullMonth (x:System.DateTime) = if x.Ticks = 0L then ("0nm" :> obj) else  x :> obj
+let isNullDate (x:System.DateTime) = if x.Ticks = 0L  then ("0nd" :> obj) else  x :> obj
+let isNullDateTime (x:System.DateTime) = if x.Ticks = 0L then ("0nt" :> obj) else  x :> obj
+let isNullKTimespan (x:System.TimeSpan) = if x.Ticks = -92233720368547758L  then ("0nn" :> obj) else  (x.TotalDays :> obj)
+let isNullMinute (x:System.TimeSpan) = if x.Ticks = -1288490188800000000L  then ("0nu" :> obj) else  x.TotalDays :> obj
+let isNullSecond (x:System.TimeSpan) = if x.Ticks = -116480000000L  then ("0nv" :> obj) else  x.TotalDays :> obj
+let isNullTimeSpan (x:System.TimeSpan) = if x.Ticks = -21474836480000L  then ("0nn" :> obj) else  x.TotalDays :> obj
 
 
 let is_nan(k:KObject) = 

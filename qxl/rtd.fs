@@ -49,8 +49,8 @@ module RtdKdb =
 
         // dict Seq.empty<string*kx.c>
 
-    type kdb_subscriber(uid:string,host:string,port:int,user:string,sub:string) = 
-        let uid,host,port,user,sub = uid,host,port,user,sub
+    type kdb_subscriber(uid:string,host:string,port:int,user:string,sub:string,append:int) = 
+        let uid,host,port,user,sub,append = uid,host,port,user,sub,append
         let mutable connection:Option<kx.c> = None // kx.c(host,port,user)
         let mutable callback:(string*kx.KObject -> unit) = (fun (x,y) -> ())
         let mutable inSub = false
@@ -94,7 +94,7 @@ module RtdKdb =
                                 connection.Value.ks(sub)
                                 outerloop()
         member this.Desc 
-            with get() = (uid,host,port,user,sub)
+            with get() = (uid,host,port,user,sub,append)
         member this.Connected =
             match connection with
             | Some(c) -> c.Connected()
@@ -109,6 +109,8 @@ module RtdKdb =
     // let subscriberMaps = new Dictionary<string,kx.c>()
     let subscriberMaps = Dictionary<string,kdb_subscriber>()
     let objMaps = Dictionary<string,obj>()
+    let kobjArray = Dictionary<string,kx.KObject array>()
+    let kobjMaps = Dictionary<string,kx.KObject>()
 
     [<ProgId("rtdkdb.rtdkdbserver");ComVisible(true)>]
     type RtdKdbServer(topics) =
@@ -120,10 +122,63 @@ module RtdKdb =
         new() = RtdKdbServer(List.empty<string*ExcelRtdServer.Topic>)
 
         member this.receiveData(id:string,o:kx.KObject) =
+
+            let _,_,_,_,_,append = match subscriberMaps.ContainsKey id with
+                                   | true -> subscriberMaps.[id].Desc
+                                   | false -> "  ","  ",1,"  ","  ",1
+
+
+            let mergeFlip1 (nkobject:kx.KObject,okobject:kx.KObject) = 
+                match nkobject,okobject with
+                | kx.AKObject(x),kx.AKObject(y) -> kx.AKObject(x |> List.append y |> (fun x -> x|> List.take (min x.Length append) )   )
+                | kx.ABool(x),kx.ABool(y) -> kx.ABool(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) ) )
+                | kx.AByte(x),kx.AByte(y) -> kx.AByte(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) ) )
+                | kx.AGuid(x),kx.AGuid(y) -> kx.AGuid(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) ) )
+                | kx.AShort(x),kx.AShort(y) -> kx.AShort(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) )) 
+                | kx.AInt(x),kx.AInt(y) -> kx.AInt(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) ))
+                | kx.ALong(x),kx.ALong(y) -> kx.ALong(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) ))
+                | kx.AReal(x),kx.AReal(y) -> kx.AReal(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) ))
+                | kx.AFloat(x),kx.AFloat(y) -> kx.AFloat(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) ))
+                | kx.AChar(x),kx.AChar(y) -> kx.AChar(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) ))
+                | kx.AString(x),kx.AString(y) -> kx.AString(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) ) )
+                | kx.ADate(x),kx.ADate(y) -> kx.ADate(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) ))
+                | kx.ATimestamp(x),kx.ATimestamp(y) -> kx.ATimestamp(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) ))
+                | kx.AMinute(x),kx.AMinute(y) -> kx.AMinute(x |> Array.append y|> (fun x -> x|> Array.take (min x.Length append) ))
+                | kx.ASecond(x),kx.ASecond(y) -> kx.ASecond(x |> Array.append y|> (fun x -> x|> Array.take (min x.Length append) ))
+                | kx.AMonth(x),kx.AMonth(y) -> kx.AMonth(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) ))
+                | kx.ADateTime(x),kx.ADateTime(y) -> kx.ADateTime(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) ))
+                | kx.AKTimespan(x),kx.AKTimespan(y) -> kx.AKTimespan(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) ))
+                | kx.ATimeSpan(x),kx.ATimeSpan(y) -> kx.ATimeSpan(x |> Array.append y |> (fun x -> x|> Array.take (min x.Length append) ))
+                | _ -> nkobject
+
+            let mergeFlip (nkobject:kx.KObject) (okobject:kx.KObject) =
+                match nkobject,okobject with
+                | kx.Flip(ox,oy),kx.Flip(nx,ny) -> let sameHeader = nx |> Array.zip ox |> Array.map (fun (x,y) -> x=y ) |> Array.reduce (fun x y -> x && y) 
+                                                   match sameHeader with
+                                                   | false -> None
+                                                   | true -> let nk = oy |> List.zip ny
+                                                                         |> List.map mergeFlip1
+                                                             Some(kx.Flip(nx,nk))
+                | _ -> None
+                
             seq <- seq + 1
+
+            let nkobject = match kobjMaps.ContainsKey id with
+                           | false ->  kobjMaps.Add(id,o)                                       
+                                       o
+                           | true -> let oldkobject =  kobjMaps.[id]
+                                     
+                                     let mo = mergeFlip o oldkobject
+                                     match mo with
+                                     | None -> kobjMaps.[id]<-o
+                                               o
+                                     | Some(mo) -> kobjMaps.[id]<-mo
+                                                   mo
+
+            let o1 = ktox.ktox nkobject
             match objMaps.ContainsKey id with
-            | true -> objMaps.[id] <- ktox.ktox o
-            | false -> objMaps.Add(id,o |> ktox.ktox)
+            | true -> objMaps.[id] <- o1
+            | false -> objMaps.Add(id,o1)
             
             _topics |> List.filter(fun (id0,_) -> id0 = id)|>List.iter(fun (_,topic) -> topic.UpdateValue(seq :> obj) )
        
@@ -154,8 +209,8 @@ module RtdKdb =
             ids |> Seq.iter(fun id -> 
                                 match subscriberMaps.ContainsKey id with
                                 | true -> let c = subscriberMaps.[id]
-                                          let uid,host,port,user,sub = c.Desc
-                                          let b = kdb_subscriber(uid,host,port,user,sub)
+                                          let uid,host,port,user,sub,append = c.Desc
+                                          let b = kdb_subscriber(uid,host,port,user,sub,append)
                                           subscriberMaps.[id] <- b
                                 | false -> ()
                            )
