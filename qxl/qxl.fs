@@ -15,7 +15,70 @@ module qxl =
         | ExcelMissing
         | KObject of kx.KObject
 
-    type XType = | XExcelEmpty | XExcelError | XExcelMissing | XBool | XString | XFloat
+    type XType = | XExcelEmpty | XExcelError | XExcelMissing | XBool | XString | XFloat | XMix
+
+    let xtok1dim (arg: obj array) =
+        let cnt = Array.length arg
+        let r= arg |> Array.map ( fun y -> 
+                                            match y with
+                                            | :? ExcelEmpty -> XExcelEmpty 
+                                            | :? ExcelError -> XExcelError 
+                                            | :? ExcelMissing -> XExcelMissing
+                                            | :? bool as o-> XBool
+                                            | :? string as o-> XString
+                                            | :? float as o-> XFloat
+                                            ) |> Array.distinct |> Array.length
+        match r with
+        | 1 ->  let oo = arg[0]
+                let r = match oo with
+                        | :? ExcelEmpty -> XExcelEmpty,Array.create cnt "ExcelEmpty" |> kx.KObject.AString
+                        | :? ExcelError -> XExcelError,Array.create cnt "ExcelError" |> kx.KObject.AString
+                        | :? ExcelMissing -> XExcelMissing,Array.create cnt "ExcelMissing" |> kx.KObject.AString 
+                        | :? bool -> XBool ,arg |> Array.map (fun x -> x :?> bool) |> kx.KObject.ABool
+                        | :? string -> XString ,arg |> Array.map (fun x -> x :?> string) |> kx.KObject.AString
+                        | :? float -> XFloat ,arg |> Array.map (fun x -> x :?> float) |> kx.KObject.AFloat
+                r
+        | _ -> let r = arg |> Array.map ( fun y -> 
+                                        match y with
+                                        | :? ExcelEmpty -> kx.KObject.String("ExcelEmpty")
+                                        | :? ExcelError -> kx.KObject.String("ExcelError")
+                                        | :? ExcelMissing -> kx.KObject.String("ExcelMissing")
+                                        | :? bool as o-> kx.KObject.Bool(o)
+                                        | :? string as o-> kx.KObject.String(o)
+                                        | :? float as o-> kx.KObject.Float(o)
+                                        ) |> Array.toList |> kx.KObject.AKObject
+               XMix,r        
+
+    // we want to turn a matrix either in dic or tbl
+    // let's check
+    let xtok2dim (arg: obj[,]) =
+        let r = arg[0,*] |> xtok1dim
+        let c = arg[*,0] |> xtok1dim
+        let rcnt = arg |> Array2D.length1
+        let lcnt = arg |> Array2D.length2
+        
+        match fst r,fst c with
+        | XString,_ -> 
+                        let a = [0 .. lcnt - 1] |> List.map (fun i -> xtok1dim arg[1 .. ,i]) |> List.map snd 
+                        let s = match (r  |> snd) with
+                                | kx.KObject.AString(s0) -> s0
+                                | _ -> Array.create rcnt "ExcelEmpty"
+                        kx.Flip(s, a)
+        | _,XString -> 
+                        let a = [0 .. rcnt - 1] |> List.map (fun i -> xtok1dim arg[i,1 .. ]) |> List.map snd |> kx.KObject.AKObject
+                        kx.Dict(snd c, a)
+        | _,_ -> 
+                        let r = arg |> Array2D.map (fun y ->
+                                                        match y with 
+                                                        | :? ExcelEmpty -> kx.KObject.String("ExcelEmpty")
+                                                        | :? ExcelError -> kx.KObject.String("ExcelError")
+                                                        | :? ExcelMissing -> kx.KObject.String("ExcelMissing")
+                                                        | :? bool as o-> kx.KObject.Bool(o)
+                                                        | :? string as o-> kx.KObject.String(o)
+                                                        | :? float as o-> kx.KObject.Float(o)
+                                                        )
+                        let s = [ for i in  0 .. r.GetLength(0) - 1 -> r.[i,*] ] |> List.map (fun x -> kx.KObject.AKObject(x |> Array.toList))
+                        kx.KObject.AKObject(s)
 
     let xtok (arg:obj) = 
         match arg with
@@ -29,81 +92,10 @@ module qxl =
                 let rcnt = o |> Array2D.length1
                 let lcnt = o |> Array2D.length2
                 match rcnt,lcnt with
-                | _,1  ->   let r= o[*,0] |> Array.map ( fun y -> 
-                                                            match y with
-                                                            | :? ExcelEmpty -> XExcelEmpty 
-                                                            | :? ExcelError -> XExcelError 
-                                                            | :? ExcelMissing -> XExcelMissing
-                                                            | :? bool as o-> XBool
-                                                            | :? string as o-> XString
-                                                            | :? float as o-> XFloat
-                                                            ) |> Array.distinct |> Array.length
-                            match r with
-                            | 1 ->  let oo = o[0,0]
-                                    let r = match oo with
-                                            | :? ExcelEmpty -> Array.create rcnt "ExcelEmpty" |> kx.KObject.AString
-                                            | :? ExcelError -> Array.create rcnt "ExcelError" |> kx.KObject.AString
-                                            | :? ExcelMissing -> Array.create rcnt "ExcelMissing" |> kx.KObject.AString 
-                                            | :? bool -> o[*,0] |> Array.map (fun x -> x :?> bool) |> kx.KObject.ABool
-                                            | :? string -> o[*,0] |> Array.map (fun x -> x :?> string) |> kx.KObject.AString
-                                            | :? float -> o[*,0] |> Array.map (fun x -> x :?> float) |> kx.KObject.AFloat
-                                    KObject(r)
-                            | _ -> let r = o[*,0] |> Array.map ( fun y -> 
-                                                            match y with
-                                                            | :? ExcelEmpty -> kx.KObject.String("ExcelEmpty")
-                                                            | :? ExcelError -> kx.KObject.String("ExcelError")
-                                                            | :? ExcelMissing -> kx.KObject.String("ExcelMissing")
-                                                            | :? bool as o-> kx.KObject.Bool(o)
-                                                            | :? string as o-> kx.KObject.String(o)
-                                                            | :? float as o-> kx.KObject.Float(o)
-                                                            )
-                                                  |> Array.toList
-                                                  |> kx.KObject.AKObject
-                                   KObject(r)
-                | 1,_  ->   let rr= o[0,*] 
-                            let r = rr |> Array.map ( fun y -> 
-                                                            match y with
-                                                            | :? ExcelEmpty -> XExcelEmpty 
-                                                            | :? ExcelError -> XExcelError 
-                                                            | :? ExcelMissing -> XExcelMissing
-                                                            | :? bool as o-> XBool
-                                                            | :? string as o-> XString
-                                                            | :? float as o-> XFloat
-                                                            ) |> Array.distinct |> Array.length
-                            match r with
-                            | 1 ->  let oo = o[0,0]
-                                    let r = match oo with
-                                            | :? ExcelEmpty -> Array.create rcnt "ExcelEmpty" |> kx.KObject.AString
-                                            | :? ExcelError -> Array.create rcnt "ExcelError" |> kx.KObject.AString
-                                            | :? ExcelMissing -> Array.create rcnt "ExcelMissing" |> kx.KObject.AString 
-                                            | :? bool -> o[0,*] |> Array.map (fun x -> x :?> bool) |> kx.KObject.ABool
-                                            | :? string -> o[0,*] |> Array.map (fun x -> x :?> string) |> kx.KObject.AString
-                                            | :? float -> o[0,*] |> Array.map (fun x -> x :?> float) |> kx.KObject.AFloat
-                                    KObject(r)
-                            | _ -> let r = o[0,*] |> Array.map ( fun y -> 
-                                                            match y with
-                                                            | :? ExcelEmpty -> kx.KObject.String("ExcelEmpty")
-                                                            | :? ExcelError -> kx.KObject.String("ExcelError")
-                                                            | :? ExcelMissing -> kx.KObject.String("ExcelMissing")
-                                                            | :? bool as o-> kx.KObject.Bool(o)
-                                                            | :? string as o-> kx.KObject.String(o)
-                                                            | :? float as o-> kx.KObject.Float(o)
-                                                            )
-                                                  |> Array.toList
-                                                  |> kx.KObject.AKObject
-                                   KObject(r)
-                | _,_  ->
-                        let r = o |> Array2D.map (fun y ->
-                                                        match y with 
-                                                        | :? ExcelEmpty -> kx.KObject.String("ExcelEmpty")
-                                                        | :? ExcelError -> kx.KObject.String("ExcelError")
-                                                        | :? ExcelMissing -> kx.KObject.String("ExcelMissing")
-                                                        | :? bool as o-> kx.KObject.Bool(o)
-                                                        | :? string as o-> kx.KObject.String(o)
-                                                        | :? float as o-> kx.KObject.Float(o)
-                                                        )
-                        let s = [ for i in  0 .. r.GetLength(0) - 1 -> r.[i,*] ] |> List.map (fun x -> kx.KObject.AKObject(x |> Array.toList))
-                        KObject(kx.KObject.AKObject(s))
+                | _,1  ->   o[*,0] |> xtok1dim |> snd |>  KObject
+                | 1,_  ->   o[0,*] |> xtok1dim |> snd |> KObject
+                | _,_  -> o |> xtok2dim  |> KObject
+
         | _ -> KObject(kx.KObject.Bool(true))
 
     let connectionMaps =
