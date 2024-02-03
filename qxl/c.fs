@@ -732,7 +732,7 @@ type deserialize(s:System.Net.Sockets.NetworkStream) =
         if (int b.[0]) = 128 then ()
         r()
 
-
+[<AllowNullLiteral>]
 type c(h:string,p:int,u:string,maxBufferSize:int) =
     let connect =
         try 
@@ -779,8 +779,167 @@ type c(h:string,p:int,u:string,maxBufferSize:int) =
     member o.gvt() = vt
     member o.Connected() = connect.Connected
 
+type cMessages = 
+    
+    | Init of string*int*string*AsyncReplyChannel<string>
+    
+    | KMessage0 of string*AsyncReplyChannel<KObject>
+    | KMessage1 of string*KObject*AsyncReplyChannel<KObject>
+    | KMessage2 of string*KObject*KObject*AsyncReplyChannel<KObject>
+    | KMessage3 of string*KObject*KObject*KObject*AsyncReplyChannel<KObject>
+    | KMessage4 of string*KObject*KObject*KObject*KObject*AsyncReplyChannel<KObject>
+    | KMessage5 of string*KObject*KObject*KObject*KObject*KObject*AsyncReplyChannel<KObject>
+    | KMessage6 of string*KObject*KObject*KObject*KObject*KObject*KObject*AsyncReplyChannel<KObject>
+    | KMessage7 of AsyncReplyChannel<KObject>
+    | KMessage8 of KObject*AsyncReplyChannel<KObject>    
 
+    | KSMessage0 of string
+    | KSMessage1 of string*KObject
+    | KSMessage2 of string*KObject*KObject
+    | KSMessage3 of string*KObject*KObject*KObject
+    | KSMessage4 of string*KObject*KObject*KObject*KObject
+    | KSMessage5 of string*KObject*KObject*KObject*KObject*KObject
+    | KSMessage6 of string*KObject*KObject*KObject*KObject*KObject*KObject
+    | KSMessage7 of KObject
 
+type cs() =
+    let mutable con:c = null
+    let mailbox = MailboxProcessor.Start(fun inbox -> 
+        let rec loop () = async {
+            let! msg = inbox.Receive()
+            match msg with 
+            | Init (h,p,u,replyChannel )-> 
+                try
+                    con <- new c(h,p,u)
+                    replyChannel.Reply("connected")
+                with
+                | KException(x) -> replyChannel.Reply(x)
+            | KMessage0(s,replyChannel) ->
+                match con with
+                | null -> replyChannel.Reply(KObject.ERROR("no_con"))
+                | _ ->  replyChannel.Reply(con.k(s))
+
+            | KMessage1(s,k1,replyChannel) ->
+                match con with
+                | null -> replyChannel.Reply(KObject.ERROR("no_con"))
+                | _ ->  replyChannel.Reply(con.k(s,k1))
+                    
+            | KMessage2(s,k1,k2,replyChannel) ->
+                match con with
+                | null -> replyChannel.Reply(KObject.ERROR("no_con"))
+                | _ ->  replyChannel.Reply(con.k(s,k1,k2))
+
+            | KMessage3(s,k1,k2,k3,replyChannel) ->
+                match con with
+                | null -> replyChannel.Reply(KObject.ERROR("no_con"))
+                | _ ->  replyChannel.Reply(con.k(s,k1,k2,k3))
+
+            | KMessage4(s,k1,k2,k3,k4,replyChannel) ->
+                match con with
+                | null -> replyChannel.Reply(KObject.ERROR("no_con"))
+                | _ ->  replyChannel.Reply(con.k(s,k1,k2,k3,k4))
+
+            | KMessage5(s,k1,k2,k3,k4,k5,replyChannel) ->
+                match con with
+                | null -> replyChannel.Reply(KObject.ERROR("no_con"))
+                | _ ->  replyChannel.Reply(con.k(s,k1,k2,k3,k4,k5))
+
+            | KMessage6(s,k1,k2,k3,k4,k5,k6,replyChannel) ->
+                match con with
+                | null -> replyChannel.Reply(KObject.ERROR("no_con"))
+                | _ ->  replyChannel.Reply(con.k(s,k1,k2,k3,k4,k5,k6))
+
+            | KMessage7(replyChannel) ->
+                match con with
+                | null -> replyChannel.Reply(KObject.ERROR("no_con"))
+                | _ ->  replyChannel.Reply(con.k())
+
+            | KMessage8(k1,replyChannel) ->
+                match con with
+                | null -> replyChannel.Reply(KObject.ERROR("no_con"))
+                | _ ->  replyChannel.Reply(con.k(k1))
+
+            | KSMessage0(s) -> 
+                match con with
+                | null -> ()
+                | _ ->  con.ks(s) 
+
+            | KSMessage1(s,k1) ->
+                match con with
+                | null -> ()
+                | _ ->  con.ks(s,k1)
+            | KSMessage2(s,k1,k2) ->
+                match con with
+                | null -> ()
+                | _ ->  con.ks(s,k1,k2)
+
+            | KSMessage3(s,k1,k2,k3) ->
+                match con with
+                | null -> ()
+                | _ ->  con.ks(s,k1,k2,k3)
+
+            | KSMessage4(s,k1,k2,k3,k4) ->
+                match con with
+                | null -> ()
+                | _ ->  con.ks(s,k1,k2,k3,k4) 
+
+            | KSMessage5(s,k1,k2,k3,k4,k5) ->
+                match con with
+                | null -> ()
+                | _ ->  con.ks(s,k1,k2,k3,k4,k5)
+
+            | KSMessage6(s,k1,k2,k3,k4,k5,k6) ->
+                match con with
+                | null -> ()
+                | _ ->  con.ks(s,k1,k2,k3,k4,k5,k6)
+
+            | KSMessage7(k1) ->
+                match con with
+                | null -> ()
+                | _ ->  con.ks(k1)                
+
+            return! loop ()
+        }
+        loop ())
+
+    member this.Init(h:string,p:int,u:string) : Async<string> =
+        mailbox.PostAndAsyncReply( fun reply -> Init(h,p,u,reply))
+    
+    member this.k(s:string) : Async<KObject> =
+        mailbox.PostAndAsyncReply( fun reply -> KMessage0(s,reply))    
+    member this.k(s:string,k:KObject) : Async<KObject> =
+        mailbox.PostAndAsyncReply( fun reply -> KMessage1(s,k,reply))    
+    member this.k(s:string,k1:KObject,k2:KObject) : Async<KObject> =
+        mailbox.PostAndAsyncReply( fun reply -> KMessage2(s,k1,k2,reply))    
+    member this.k(s:string,k1:KObject,k2:KObject,k3:KObject) : Async<KObject> =
+        mailbox.PostAndAsyncReply( fun reply -> KMessage3(s,k1,k2,k3,reply))    
+    member this.k(s:string,k1:KObject,k2:KObject,k3:KObject,k4:KObject) : Async<KObject> =
+        mailbox.PostAndAsyncReply( fun reply -> KMessage4(s,k1,k2,k3,k4,reply))    
+    member this.k(s:string,k1:KObject,k2:KObject,k3:KObject,k4:KObject,k5:KObject) : Async<KObject> =
+        mailbox.PostAndAsyncReply( fun reply -> KMessage5(s,k1,k2,k3,k4,k5,reply))    
+    member this.k(s:string,k1:KObject,k2:KObject,k3:KObject,k4:KObject,k5:KObject,k6:KObject) : Async<KObject> =
+        mailbox.PostAndAsyncReply( fun reply -> KMessage6(s,k1,k2,k3,k4,k5,k6,reply))     
+     member this.k() : Async<KObject> = 
+        mailbox.PostAndAsyncReply( fun reply -> KMessage7(reply))
+    member this.k(k:KObject) : Async<KObject> =
+        mailbox.PostAndAsyncReply( fun reply -> KMessage8(k,reply))
+
+    member this.ks(x:KObject) =
+        mailbox.Post(KSMessage7(x))    
+    member this.ks(str:string) =
+        mailbox.Post(KSMessage0(str))    
+    member this.ks(s:string,x:KObject) =
+        mailbox.Post(KSMessage1(s,x))    
+    member this.ks(s:string,x:KObject,y:KObject) =
+        mailbox.Post(KSMessage2(s,x,y))    
+    member this.ks(s:string,x:KObject,y:KObject,z:KObject) =
+        mailbox.Post(KSMessage3(s,x,y,z))    
+    member this.ks(s:string,x:KObject,y:KObject,z:KObject,a:KObject) =
+        mailbox.Post(KSMessage4(s,x,y,z,a))    
+    member this.ks(s:string,x:KObject,y:KObject,z:KObject,a:KObject,b:KObject) =
+        mailbox.Post(KSMessage5(s,x,y,z,a,b))    
+    member this.ks(s:string,x:KObject,y:KObject,z:KObject,a:KObject,b:KObject,c:KObject,d:KObject) =
+        mailbox.Post(KSMessage6(s,x,y,z,a,c,d))    
 
 //let c = kx.c("localhost",8888)
 //

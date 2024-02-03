@@ -147,34 +147,42 @@ module qxl =
                                                 | ex -> "no_con"
         
             uid :> obj
-
+             
+    let csMaps =
+        new Dictionary<string,kx.cs>()
 
     let async_open_connection (uid:string) (host:string) (port:int) (user:string) (passwd:string)=
         async {
-            let uid = match port with
-                      | 0 -> ExcelMissing :> obj
-                      | _ ->
-                             match connectionMaps.ContainsKey uid with
-                             | false -> 
-                                          let con = kx.c(host,port,user+":"+passwd)
-                                          connectionMaps.Add(uid,con)
-                                          uid :> obj
-                             | true -> let con = connectionMaps.Item uid
-                                       match con.Connected() with
-                                       | true -> uid :> obj
-                                                 
-                                       | false -> connectionMaps.Remove uid |> ignore
-                                                  let con = kx.c(host,port,user+":"+passwd)
-                                                  connectionMaps.Add(uid,con)
-                                                  uid :> obj      
-            return uid
+            match port with
+            | 0 -> return ExcelMissing :> obj
+            | _ ->
+                    match csMaps.ContainsKey uid with
+                    | false -> 
+                                let con = new kx.cs()
+                                let! msg = con.Init(host,port,user+":"+passwd)
+
+                                match msg with
+                                | "connected" -> csMaps.Add(uid,con) |> ignore
+                                                 return uid :> obj
+                                | _ -> return "no_con" :> obj                                          
+
+                    | true ->   let con = connectionMaps.Item uid
+                                match con.Connected() with
+                                | true -> return  uid :> obj                                                 
+                                | false ->  csMaps.Remove uid |> ignore
+                                            let con = new kx.cs()
+                                            let! msg = con.Init(host,port,user+":"+passwd)
+                                            match msg with
+                                            | "connected" -> csMaps.Add(uid,con) |> ignore
+                                                             return uid :> obj
+                                            | _ -> return "no_con" :> obj
+                                            
         }
 
 
     [<ExcelFunction(Description="async execute query")>]
     let dna_aopen_connection (uid:string) (host:string) (port:int) (user:string) (passwd:string)= 
-        FsAsyncUtil.excelObserve "async_open_connection" [|uid :> obj; host :> obj; port :> obj; user :> obj ; passwd :> obj |]
-            (FsAsyncUtil.observeAsync (async_open_connection uid host port user passwd ))
+        FsAsyncUtil.excelRunAsync "async_open_connection" [|uid :> obj; host :> obj; port :> obj; user :> obj ; passwd :> obj |] (async_open_connection uid host port user passwd )
 
     [<ExcelFunction(Description="execute query")>]
     let dna_execute (random:obj) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
@@ -195,12 +203,11 @@ module qxl =
 
     let asyncExecute (random) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
         async {
-            let r = 
-                match connectionMaps.ContainsKey uid with
-                | false -> "uid not found" :> obj
-                | true -> let con = connectionMaps.Item uid
+                match csMaps.ContainsKey uid with
+                | false -> return "uid not found" :> obj
+                | true -> let con = csMaps.Item uid
                           let x,y,z,a,b = xtok x,xtok y,xtok z,xtok a,xtok b                  
-                          let r = match x,y,z,a,b with
+                          let! r = match x,y,z,a,b with
                                   | ExcelMissing,_,_,_,_-> con.k(query)
                                   | KObject(x),ExcelMissing,_,_,_-> con.k(query,x)
                                   | KObject(x),KObject(y),ExcelMissing,_,_-> con.k(query,x,y)
@@ -208,14 +215,12 @@ module qxl =
                                   | KObject(x),KObject(y),KObject(z),KObject(a),ExcelMissing-> con.k(query,x,y,z,a)
                                   | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b)-> con.k(query,x,y,z,a,b)
                                   // | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b),KObject(c)-> con.k(query,x,y,z,a,b,c)
-                          ktox r
-            return r
+                          return ktox r
         }
 
     [<ExcelFunction(Description="async execute query")>]
-    let dna_axecute (random:obj) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
-        FsAsyncUtil.excelObserve "asyncExecute" [|random; (uid :> obj); (query :> obj); x; y; z; a; b |]
-            (FsAsyncUtil.observeAsync(asyncExecute random uid query x y z a b ))
+    let dna_aexecute (random:obj) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
+        FsAsyncUtil.excelRunAsync "asyncExecute" [|random; (uid :> obj); (query :> obj); x; y; z; a; b |] (asyncExecute random uid query x y z a b )
         
 
     [<ExcelFunction(Description="execute query")>]
