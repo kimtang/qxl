@@ -65,7 +65,25 @@ module qxl =
                                 | _ -> Array.create rcnt "ExcelEmpty"
                         kx.Flip(s, a)
         | _,XString -> 
-                        let a = [0 .. rcnt - 1] |> List.map (fun i -> xtok1dim arg[i,1 .. ]) |> List.map snd |> kx.KObject.AKObject
+                        let a = [0 .. rcnt - 1] |> List.map ( fun i -> let ab = arg[i,1 .. ]
+                                                                               |> Array.map ( fun x ->  match x with
+                                                                                                        | :? ExcelEmpty -> false,x
+                                                                                                        | :? ExcelError -> false,x
+                                                                                                        | :? ExcelMissing -> false,x
+                                                                                                        | _ -> true,x
+                                                                                            )
+                                                                               |> Array.filter (fun (b,x) -> b)
+                                                                               |> Array.map (fun (b,x) -> x)
+                                                                       match ab.Length with
+                                                                       | 1 ->   match ab.[0] with
+                                                                                | :? bool as o-> kx.KObject.Bool(o)
+                                                                                | :? string as o-> kx.KObject.String(o)
+                                                                                | :? float as o-> kx.KObject.Float(o)
+                                                                                | _ ->  kx.KObject.Bool(true)
+
+                                                                       | _ -> ab |> xtok1dim |> snd
+                                                            ) 
+                                                |> kx.KObject.AKObject
                         kx.Dict(snd c, a)
         | _,_ -> 
                         let r = arg |> Array2D.map (fun y ->
@@ -185,7 +203,45 @@ module qxl =
         FsAsyncUtil.excelRunAsync "async_open_connection" [|uid :> obj; host :> obj; port :> obj; user :> obj ; passwd :> obj |] (async_open_connection uid host port user passwd )
 
     [<ExcelFunction(Description="execute query")>]
-    let dna_execute (random:obj) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
+    let dna_execute (random:obj) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
+
+        let query = match query with
+                    | :? string as query-> query
+                    | :? (obj[,]) as o ->
+                        let rcnt = o |> Array2D.length1
+                        let lcnt = o |> Array2D.length2
+                        let arr = match rcnt,lcnt with
+                                  | _,1  ->   o[*,0] |> Array.map (fun x -> 
+                                                                         match x with
+                                                                         | :? string as s -> true,s
+                                                                         | _ -> false,""
+                                                                )
+                                                     |> Array.filter (fun (x,s) -> x)
+                                                     |> Array.map (fun (x,s) -> s)
+                                                     |> Array.fold (fun x y -> x + "\n" + y) ""
+                                  | 1,_  ->   o[0,*] |> Array.map (fun x -> 
+                                                                         match x with
+                                                                         | :? string as s -> true,s
+                                                                         | _ -> false,""
+                                                                )
+                                                     |> Array.filter (fun (x,s) -> x)
+                                                     |> Array.map (fun (x,s) -> s)
+                                                     |> Array.fold (fun x y -> x + "\n" + y) ""
+
+                                  | _,_  ->  let arr = [| for i in  0 .. o.GetLength(0) - 1 -> o.[i,*] |]
+                                                       |> Array.map (
+                                                            fun x -> x |> Array.map(    fun x0 -> match x0 with
+                                                                                                  | :? string as s -> s
+                                                                                                  | :? bool as b -> if b then "1b" else "0b"
+                                                                                                  | :? float as f -> if f=System.Math.Round(f) then sprintf "%i" (int (System.Math.Round(f))) else sprintf "%f" f
+                                                                                                                     
+                                                                                                  | _ -> ""
+                                                                                        ) |> Array.fold (fun x y -> x + y) "" 
+                                                            )
+                                             arr |> Array.fold (fun x y -> x + "\n" + y) ""
+                        arr
+                    | _ -> failwith "not a vector"
+
         match connectionMaps.ContainsKey uid with
         | false -> "uid not found" :> obj
         | true -> let con = connectionMaps.Item uid
@@ -201,13 +257,51 @@ module qxl =
                           // | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b),KObject(c)-> con.k(query,x,y,z,a,b,c)
                   ktox r
 
-    let asyncExecute (random) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
+    let asyncExecute (random) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
         async {
+
+                let query = match query with
+                            | :? string as query-> query
+                            | :? (obj[,]) as o ->
+                                let rcnt = o |> Array2D.length1
+                                let lcnt = o |> Array2D.length2
+                                let arr = match rcnt,lcnt with
+                                          | _,1  ->   o[*,0] |> Array.map (fun x -> 
+                                                                                 match x with
+                                                                                 | :? string as s -> true,s
+                                                                                 | _ -> false,""
+                                                                        )
+                                                             |> Array.filter (fun (x,s) -> x)
+                                                             |> Array.map (fun (x,s) -> s)
+                                                             |> Array.fold (fun x y -> x + "\n" + y) ""
+                                          | 1,_  ->   o[0,*] |> Array.map (fun x -> 
+                                                                                 match x with
+                                                                                 | :? string as s -> true,s
+                                                                                 | _ -> false,""
+                                                                        )
+                                                             |> Array.filter (fun (x,s) -> x)
+                                                             |> Array.map (fun (x,s) -> s)
+                                                             |> Array.fold (fun x y -> x + "\n" + y) ""
+
+                                          | _,_  ->  let arr = [| for i in  0 .. o.GetLength(0) - 1 -> o.[i,*] |]
+                                                               |> Array.map (
+                                                                    fun x -> x |> Array.map(    fun x0 -> match x0 with
+                                                                                                          | :? string as s -> s
+                                                                                                          | :? bool as b -> if b then "1b" else "0b"
+                                                                                                          | :? float as f -> if f=System.Math.Round(f) then sprintf "%i" (int (System.Math.Round(f))) else sprintf "%f" f
+                                                                                                                     
+                                                                                                          | _ -> ""
+                                                                                                ) |> Array.fold (fun x y -> x + y) "" 
+                                                                    )
+                                                     arr |> Array.fold (fun x y -> x + "\n" + y) ""
+                                arr
+                            | _ -> failwith "not a vector"
+
                 match csMaps.ContainsKey uid with
                 | false -> return "uid not found" :> obj
                 | true -> let con = csMaps.Item uid
                           let x,y,z,a,b = xtok x,xtok y,xtok z,xtok a,xtok b                  
-                          let! r = match x,y,z,a,b with
+                          let! r =match x,y,z,a,b with
                                   | ExcelMissing,_,_,_,_-> con.k(query)
                                   | KObject(x),ExcelMissing,_,_,_-> con.k(query,x)
                                   | KObject(x),KObject(y),ExcelMissing,_,_-> con.k(query,x,y)

@@ -281,7 +281,7 @@ let ktox( k:KObject) =
     match k with
     | ERROR(x) -> "'" + x :> obj
     | TODO -> raise (KException("TODO in ktox"))
-    | NULL -> raise (KException("Null in ktox"))
+    | NULL -> String("NULL") |> conv_as_obj0
     | Bool(x) -> Bool(x)|> conv_as_obj0
     | Guid(x) -> Guid(x)|> conv_as_obj0
     | Byte(x) -> Byte(x)|> conv_as_obj0
