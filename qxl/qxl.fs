@@ -17,6 +17,42 @@ module qxl =
 
     type XType = | XExcelEmpty | XExcelError | XExcelMissing | XBool | XString | XFloat | XMix
 
+    type XParse = |Star|B|G|X|H|I|J|E|F|C|S|P|M|D|Z|N|U|V|T
+
+    let getXParse0 (x:string) =
+        let s = x.Split(".")
+        if 1=s.Length then x,Star else
+        let l = s |> Array.rev |> Array.head |> fun x -> x.ToUpper()
+        let x1 = s |> Array.rev |> Array.tail |> Array.rev |> Array.reduce (fun x y -> x + "." + y)
+        match l with
+        | "*" -> x1,Star
+        | "B" -> x1,B
+        | "G" -> x1,I
+        | "X" -> x1,I
+        | "H" -> x1,I
+        | "I" -> x1,I
+        | "J" -> x1,J
+        | "E" -> x1,E
+        | "F" -> x1,F
+        | "C" -> x1,C
+        | "S" -> x1,S
+        | "P" -> x1,P
+        | "M" -> x1,M
+        | "D" -> x1,D
+        | "Z" -> x1,Z
+        | "N" -> x1,N
+        | "U" -> x1,U
+        | "V" -> x1,V
+        | "T" -> x1,T
+        | _ -> x,Star
+
+
+    let getXParse (x:string array) =  
+        let x0 = x |> Array.map getXParse0
+        let x1 = x0 |>  Array.map fst
+        let x2 = x0 |>  Array.map snd
+        x1,x2
+
     let xtok1dim (arg: obj array) =
         let cnt = Array.length arg
         let r= arg |> Array.map ( fun y -> 
@@ -49,6 +85,323 @@ module qxl =
                                         ) |> Array.toList |> kx.KObject.AKObject
                XMix,r        
 
+    let xtok1dimStar (arg:obj array) =
+        let r = match arg.Length with
+                | 1 -> match arg.[0] with
+                       | :? ExcelEmpty -> XExcelEmpty,kx.KObject.String("ExcelEmpty")
+                       | :? ExcelError -> XExcelError,kx.KObject.String("ExcelError")
+                       | :? ExcelMissing -> XExcelMissing,kx.KObject.String("ExcelMissing")
+                       | :? bool as o-> XBool ,kx.KObject.Bool(o)
+                       | :? string as o-> XString ,kx.KObject.String(o)
+                       | :? float as o-> XFloat,kx.KObject.Float(o)
+                | _ -> xtok1dim arg
+        r
+
+    let xtok1dimB (arg:obj array) = 
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> o
+                                           | :? string as o-> match o with
+                                                              | "1b" -> true
+                                                              | "0b" -> false
+                                                              | "TRUE" -> true
+                                                              | "False" -> false
+                                           | :? float as o-> if o<1 then false else true
+                                           | _ -> false
+                         )
+        match r.Length with
+        | 1 -> XBool,kx.KObject.Bool(r.[0])
+        | _ -> XBool,kx.KObject.ABool(r)
+
+
+    let xtok1dimG (arg:obj array) = 
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> System.Guid.Empty
+                                           | :? string as o-> 
+                                                    try
+                                                        System.Guid.Parse(o)
+                                                    with
+                                                        | _ -> System.Guid.Empty
+
+                                           | :? float as o-> System.Guid.Empty
+                                           | _ -> System.Guid.Empty
+                         )
+        match r.Length with
+        | 1 -> XBool,kx.KObject.Guid(r.[0])
+        | _ -> XFloat,kx.KObject.AGuid(r)
+        
+
+    let xtok1dimX0 (arg:obj array) = 
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> if o then 1uy else 0uy
+                                           | :? string as o-> 
+                                                    try
+                                                        byte(o)
+                                                    with
+                                                        | _ -> 0uy
+
+                                           | :? float as o-> byte(o)
+                                           | _ -> 0uy
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.Byte(r.[0])
+        | _ -> XFloat,kx.KObject.AByte(r)
+
+    let xtok1dimH (arg:obj array) =
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> if o then 1s else 0s
+                                           | :? string as o-> 
+                                                    try
+                                                        int16(o)
+                                                    with
+                                                        | _ -> 0s
+
+                                           | :? float as o-> int16(o)
+                                           | _ -> 0s
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.Short(r.[0])
+        | _ -> XFloat,kx.KObject.AShort(r)    
+        
+    let xtok1dimI (arg:obj array) = 
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> if o then 1 else 0
+                                           | :? string as o-> 
+                                                    try
+                                                        int(o)
+                                                    with
+                                                        | _ -> 0
+
+                                           | :? float as o-> int(o)
+                                           | _ -> 0
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.Int(r.[0])
+        | _ ->XFloat,kx.KObject.AInt(r)
+
+    let xtok1dimJ (arg:obj array) = 
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> if o then 1L else 0L
+                                           | :? string as o-> 
+                                                    try
+                                                        int64(o)
+                                                    with
+                                                        | _ -> 0L
+
+                                           | :? float as o-> int64(o)
+                                           | _ -> 0L
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.Long(r.[0])
+        | _ -> XFloat,kx.KObject.ALong(r)
+
+    let xtok1dimE (arg:obj array) = 
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> if o then 1.0f else 0.0f
+                                           | :? string as o-> 
+                                                    try
+                                                        single(o)
+                                                    with
+                                                        | _ -> 0.0f
+
+                                           | :? float as o-> single(o)
+                                           | _ -> 0.0f
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.Real(r.[0])
+        | _ ->XFloat,kx.KObject.AReal(r)
+
+    let xtok1dimF (arg:obj array) = 
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> if o then 1.0 else 0.0
+                                           | :? string as o-> 
+                                                    try
+                                                        float(o)
+                                                    with
+                                                        | _ -> 0.0
+
+                                           | :? float as o-> float(o)
+                                           | _ -> 0.0
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.Float(r.[0])
+        | _ ->XFloat,kx.KObject.AFloat(r)
+
+    let xtok1dimC (arg:obj array) = 
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> if o then '1' else '0'
+                                           | :? string as o-> 
+                                                    match o.Length with
+                                                    | 0 -> '0'
+                                                    | _ -> o.Chars(0)
+                                                    
+                                           | :? float as o-> '0'
+                                           | _ -> '0'
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.Char(r.[0])
+        | _ ->XFloat,kx.KObject.AChar(r)
+
+    let xtok1dimS (arg:obj array) = 
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> if o then "true" else "false"
+                                           | :? string as o-> o
+                                           | :? float as o-> string(o)
+                                           | _ -> ""
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.String(r.[0])
+        | _ ->XFloat,kx.KObject.AString(r)
+
+    let xtok1dimP (arg:obj array) = 
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> System.DateTime(538589095631452241L)
+                                           | :? string as o-> 
+                                                    try
+                                                        System.DateTime.Parse(o)
+                                                    with
+                                                        | _ -> System.DateTime(538589095631452241L)
+
+                                           | :? float as o-> System.DateTime.FromOADate(o)
+                                           | _ -> System.DateTime(538589095631452241L)
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.Timestamp(r.[0])
+        | _ ->XFloat,kx.KObject.ATimestamp(r)
+
+    let xtok1dimM (arg:obj array) = 
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> System.DateTime(538589095631452241L)
+                                           | :? string as o-> 
+                                                    try
+                                                        System.DateTime.Parse(o)
+                                                    with
+                                                        | _ -> System.DateTime(538589095631452241L)
+
+                                           | :? float as o-> System.DateTime.FromOADate(o)
+                                           | _ -> System.DateTime(538589095631452241L)
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.Month(r.[0])
+        | _ ->XFloat,kx.KObject.AMonth(r)
+
+    let xtok1dimD (arg:obj array) =
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> System.DateTime(538589095631452241L)
+                                           | :? string as o-> 
+                                                    try
+                                                        System.DateTime.Parse(o)
+                                                    with
+                                                        | _ -> System.DateTime(538589095631452241L)
+
+                                           | :? float as o-> System.DateTime.FromOADate(o)
+                                           | _ -> System.DateTime(538589095631452241L)
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.Date(r.[0])
+        | _ ->XFloat,kx.KObject.ADate(r)
+
+    let xtok1dimZ (arg:obj array) = 
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> System.DateTime(538589095631452241L)
+                                           | :? string as o-> 
+                                                    try
+                                                        System.DateTime.Parse(o)
+                                                    with
+                                                        | _ -> System.DateTime(538589095631452241L)
+
+                                           | :? float as o-> System.DateTime.FromOADate(o)
+                                           | _ -> System.DateTime(538589095631452241L)
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.DateTime(r.[0])
+        | _ ->XFloat,kx.KObject.ADateTime(r)
+
+    let xtok1dimN (arg:obj array) = 
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> System.TimeSpan(-21474836480000L)
+                                           | :? string as o-> 
+                                                    try
+                                                        System.TimeSpan.Parse(o)
+                                                    with
+                                                        | _ -> System.TimeSpan(-21474836480000L)
+
+                                           | :? float as o-> System.TimeSpan.FromSeconds(o)
+                                           | _ -> System.TimeSpan(-21474836480000L)
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.TimeSpan(r.[0])
+        | _ ->XFloat,kx.KObject.ATimeSpan(r)
+
+    let xtok1dimU (arg:obj array) = 
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> System.TimeSpan(-21474836480000L)
+                                           | :? string as o-> 
+                                                    try
+                                                        System.TimeSpan.Parse(o)
+                                                    with
+                                                        | _ -> System.TimeSpan(-21474836480000L)
+
+                                           | :? float as o-> System.TimeSpan.FromSeconds(o)
+                                           | _ -> System.TimeSpan(-21474836480000L)
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.Minute(r.[0])
+        | _ ->XFloat,kx.KObject.AMinute(r)
+
+    let xtok1dimV (arg:obj array) =
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> System.TimeSpan(-21474836480000L)
+                                           | :? string as o-> 
+                                                    try
+                                                        System.TimeSpan.Parse(o)
+                                                    with
+                                                        | _ -> System.TimeSpan(-21474836480000L)
+
+                                           | :? float as o-> System.TimeSpan.FromSeconds(o)
+                                           | _ -> System.TimeSpan(-21474836480000L)
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.Second(r.[0])
+        | _ ->XFloat,kx.KObject.ASecond(r)
+
+    let xtok1dimT (arg:obj array) = 
+        let r = arg |> Array.map (fun x -> match x with
+                                           | :? bool as o-> System.TimeSpan(-21474836480000L)
+                                           | :? string as o-> 
+                                                    try
+                                                        System.TimeSpan.Parse(o)
+                                                    with
+                                                        | _ -> System.TimeSpan(-21474836480000L)
+
+                                           | :? float as o-> System.TimeSpan.FromSeconds(o)
+                                           | _ -> System.TimeSpan(-21474836480000L)
+                         )
+        match r.Length with
+        | 1 -> XFloat,kx.KObject.KTimespan(r.[0])
+        | _ ->XFloat,kx.KObject.AKTimespan(r)
+
+    let xtok1dimX (arg: obj array)(t:XParse) =
+        match t with
+        |Star -> xtok1dimStar arg
+        |B    -> xtok1dimB arg
+        |G    -> xtok1dimG arg
+        |X    -> xtok1dimX0 arg
+        |H    -> xtok1dimH arg
+        |I    -> xtok1dimI arg
+        |J    -> xtok1dimJ arg
+        |E    -> xtok1dimE arg
+        |F    -> xtok1dimF arg
+        |C    -> xtok1dimC arg
+        |S    -> xtok1dimS arg
+        |P    -> xtok1dimP arg
+        |M    -> xtok1dimM arg
+        |D    -> xtok1dimD arg
+        |Z    -> xtok1dimZ arg
+        |N    -> xtok1dimN arg
+        |U    -> xtok1dimU arg
+        |V    -> xtok1dimV arg
+        |T    -> xtok1dimT arg
+
     // we want to turn a matrix either in dic or tbl
     // let's check
     let xtok2dim (arg: obj[,]) =
@@ -59,13 +412,27 @@ module qxl =
         
         match fst r,fst c with
         | XString,_ -> 
-                        let a = [0 .. lcnt - 1] |> List.map (fun i -> xtok1dim arg[1 .. ,i]) |> List.map snd 
-                        let s = match (r  |> snd) with
-                                | kx.KObject.AString(s0) -> s0
-                                | _ -> Array.create rcnt "ExcelEmpty"
+                        let s,d = match (r  |> snd) with
+                                  | kx.KObject.AString(s0) -> getXParse s0
+                                  | _ -> (Array.create rcnt "ExcelEmpty"),Array.create rcnt Star
+                        let a = d |> Array.zip [|0 .. lcnt - 1|]
+                                |> Array.map (fun (i,d) -> xtok1dimX arg[1 .. ,i] d) |> Array.map snd
+                                |> Array.toList
                         kx.Flip(s, a)
         | _,XString -> 
-                        let a = [0 .. rcnt - 1] |> List.map ( fun i -> let ab = arg[i,1 .. ]
+
+                        let s,d = match (c  |> snd) with
+                                  | kx.KObject.AString(s0) -> getXParse s0
+                                  | _ -> (Array.create rcnt "ExcelEmpty"),Array.create rcnt Star
+
+                        let a = d |> Array.zip [|0 .. lcnt - 1|]
+                                |> Array.map (fun (i,d) -> xtok1dimX arg[i,1 .. ] d) |> Array.map snd
+                                |> Array.toList
+                                |> kx.KObject.AKObject
+                        
+                        let k = s |> kx.KObject.AString
+
+(*                        let a = [0 .. rcnt - 1] |> List.map ( fun i -> let ab = arg[i,1 .. ]
                                                                                |> Array.map ( fun x ->  match x with
                                                                                                         | :? ExcelEmpty -> false,x
                                                                                                         | :? ExcelError -> false,x
@@ -83,8 +450,8 @@ module qxl =
 
                                                                        | _ -> ab |> xtok1dim |> snd
                                                             ) 
-                                                |> kx.KObject.AKObject
-                        kx.Dict(snd c, a)
+                                                |> kx.KObject.AKObject*)
+                        kx.Dict(k, a)
         | _,_ -> 
                         let r = arg |> Array2D.map (fun y ->
                                                         match y with 
