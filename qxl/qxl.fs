@@ -490,6 +490,14 @@ module qxl =
     let dna_connection(arg:obj) =
         connectionMaps.Keys |> Seq.toArray :> obj
 
+
+    [<ExcelFunction(Description="My first .NET function")>]
+    let dna_cell_reference() =
+        let reference:ExcelReference = XlCall.Excel(XlCall.xlfCaller) |> unbox
+        let cellReference:string = XlCall.Excel(XlCall.xlfAddress, 1+reference.RowFirst,1+reference.ColumnFirst) |> unbox
+        let sheetName:string = XlCall.Excel(XlCall.xlSheetNm,reference) |> unbox
+        sheetName + cellReference
+
     [<ExcelFunction(Description="My first .NET function")>]
     let dna_describe (arg:obj) =
         match arg with
@@ -564,6 +572,45 @@ module qxl =
                                             
         }
 
+    let rec argComparer1 (x:obj) (y:obj) : bool =
+        match x,y with
+        | :? ExcelEmpty as x, (:? ExcelEmpty as y)-> true
+        | :? ExcelError as x,(:? ExcelError as y)-> true
+        | :? ExcelMissing as x,(:? ExcelMissing as y)-> true
+        | :? bool as x,(:? bool as y)-> x=y
+        | :? string as x,(:? string as y)-> x.Equals y
+        | :? float as x,(:? float as y)-> x=y
+        | :? (obj[]) as x,(:? (obj[]) as y)->
+            let dx,dy = x.Length,y.Length
+            if not (dx=dy) then false else argComparer2 x y
+        | :? (obj[,]) as x,(:? (obj[,]) as y)->
+            let dx1,dx2 = Array2D.length1 x,Array2D.length2 x
+            let dy1,dy2 = Array2D.length1 y,Array2D.length2 y
+            if not((dx1=dy1) && (dx2=dy2)) then false else argComparer3 x y
+        | _,_ -> false
+    and argComparer2 (x:obj[]) (y:obj[]) =
+        x |> Array.zip y |> Array.map (fun (x,y) -> argComparer1 x y ) |> Array.reduce (&&)
+    and argComparer3 (x:obj[,]) (y:obj[,]) =
+        let s = [| for i in  0 .. x.GetLength(0) - 1 -> argComparer2 x.[i,*] y.[i,*] |] |> Array.reduce (&&)
+        s
+        
+
+    let argComparer0 (x1,x2,x3,x4,x5,x6,x7) (y1,y2,y3,y4,y5,y6,y7) : bool =
+        argComparer1 [|x1;x2;x3;x4;x5;x6;x7|] [|y1;y2;y3;y4;y5;y6;y7|]
+
+    type argComparer() = 
+        interface IEqualityComparer<obj*string*obj*obj*obj*obj*obj*obj> with
+            member this.Equals((x1,x2,x3,x4,x5,x6,x7,x8),(y1,y2,y3,y4,y5,y6,y7,y8)): bool = 
+                let z0 = argComparer0 (x1,x2,x3,x4,x5,x6,x7) (y1,y2,y3,y4,y5,y6,y7)
+                z0 && x2.Equals y2
+            member this.GetHashCode((x1,x2,x3,x4,x5,x6,x7,x8)): int = 
+                System.HashCode.Combine(x1,x2,x3,x4,x5,x6,x7,x8)
+
+        
+    // fun (x1,x2,x3,x4,x5,x6,x7,x8) (y1,y2,y3,y4,y5,y6,y7,y8) -> true 
+
+    let argMaps =
+        new Dictionary<string,obj*string*obj*obj*obj*obj*obj*obj*obj*System.DateTime>()
 
     [<ExcelFunction(Description="async execute query")>]
     let dna_aopen_connection (uid:string) (host:string) (port:int) (user:string) (passwd:string)= 
@@ -624,9 +671,9 @@ module qxl =
                           // | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b),KObject(c)-> con.k(query,x,y,z,a,b,c)
                   ktox r
 
-    let asyncExecute (random) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
+    let asyncExecute (arg:string) (random) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
         async {
-
+                // let arg = random,uid,query,x,y,z,a,b
                 let query = match query with
                             | :? string as query-> query
                             | :? (obj[,]) as o ->
@@ -667,21 +714,34 @@ module qxl =
                 match csMaps.ContainsKey uid with
                 | false -> return "uid not found" :> obj
                 | true -> let con = csMaps.Item uid
-                          let x,y,z,a,b = xtok x,xtok y,xtok z,xtok a,xtok b                  
-                          let! r =match x,y,z,a,b with
+                          let x1,y1,z1,a1,b1 = xtok x,xtok y,xtok z,xtok a,xtok b                  
+                          let! r =match x1,y1,z1,a1,b1 with
                                   | ExcelMissing,_,_,_,_-> con.k(query)
-                                  | KObject(x),ExcelMissing,_,_,_-> con.k(query,x)
-                                  | KObject(x),KObject(y),ExcelMissing,_,_-> con.k(query,x,y)
-                                  | KObject(x),KObject(y),KObject(z),ExcelMissing,_-> con.k(query,x,y,z)
-                                  | KObject(x),KObject(y),KObject(z),KObject(a),ExcelMissing-> con.k(query,x,y,z,a)
-                                  | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b)-> con.k(query,x,y,z,a,b)
+                                  | KObject(x1),ExcelMissing,_,_,_-> con.k(query,x1)
+                                  | KObject(x1),KObject(y1),ExcelMissing,_,_-> con.k(query,x1,y1)
+                                  | KObject(x1),KObject(y1),KObject(z1),ExcelMissing,_-> con.k(query,x1,y1,z1)
+                                  | KObject(x1),KObject(y1),KObject(z1),KObject(a1),ExcelMissing-> con.k(query,x1,y1,z1,a1)
+                                  | KObject(x1),KObject(y1),KObject(z1),KObject(a1),KObject(b1)-> con.k(query,x1,y1,z1,a1,b1)
                                   // | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b),KObject(c)-> con.k(query,x,y,z,a,b,c)
-                          return ktox r
+                          let o = ktox r
+                          if argMaps.ContainsKey arg then arg |> argMaps.Remove |> ignore
+                          argMaps.Add(arg,(random,uid,query,x,y,z,a,b,o,System.DateTime.Now))
+                          return o
         }
 
     [<ExcelFunction(Description="async execute query")>]
-    let dna_aexecute (random:obj) (uid:string) (query:string) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
-        FsAsyncUtil.excelRunAsync "asyncExecute" [|random; (uid :> obj); (query :> obj); x; y; z; a; b |] (asyncExecute random uid query x y z a b )
+    let dna_aexecute (random:obj) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
+        let arg = dna_cell_reference()
+        // let arg = random,uid,query,x,y,z,a,b
+        match argMaps.ContainsKey arg with
+        | false -> FsAsyncUtil.excelRunAsync "asyncExecute" [|(arg :> obj); random; uid; query; x; y; z; a; b |] (asyncExecute arg random uid query x y z a b )
+        | true -> let (random1,uid1,query1,x1,y1,z1,a1,b1,r,p) = argMaps.Item arg
+                  if uid.Equals uid1 && argComparer0 (random,query,x,y,z,a,b) (random1,query1,x1,y1,z1,a1,b1) then r 
+                  else 
+                    FsAsyncUtil.excelRunAsync "asyncExecute" [|(arg :> obj); random; uid; query; x; y; z; a; b |] (asyncExecute arg random uid query x y z a b )
+                  // let t = System.DateTime.Now - p
+                  // if t.TotalSeconds < 1 then o else FsAsyncUtil.excelRunAsync "asyncExecute" [|random; (uid :> obj); (query); x; y; z; a; b |] (asyncExecute random uid query x y z a b )
+
         
 
     [<ExcelFunction(Description="execute query")>]
