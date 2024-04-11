@@ -319,11 +319,11 @@ let ktox( k:KObject) =
     | ASecond(x) -> ASecond(x) |> conv_as_array1  :> obj
     | ATimeSpan(x) -> ATimeSpan(x) |> conv_as_array1  :> obj
     | Dict(x,y) -> 
-        match x with 
+        match y with 
         | Flip(a,b) ->
-            let xc = conv_as_matrix0 x
+            let xc = x |> conv_as_array1 |> Array.append [|("" :> obj)|]
             let yc = conv_as_matrix0 y        
-            let r = yc |> Array.zip xc |> Array.map (fun (x,y) -> Array.append x y)
+            let r = yc |> Array.zip xc |> Array.map (fun (x,y) -> Array.append [|x|] y)
             let twoDimensionalArray = Array2D.init r.Length r.[0].Length    (fun i j -> r.[i].[j])
             twoDimensionalArray :> obj
         | _ ->
@@ -334,8 +334,11 @@ let ktox( k:KObject) =
                      | _ -> [|for i in 1 .. yc.[0].Length -> [| for j in 1 .. yc.Length -> yc.[j - 1].[i - 1] |] |]
             // let yc2 = Array2D.init r.[0].Length r.Length (fun i j -> r.[j].[i])
             // let r = yc |> Array.zip xc |> Array.map (fun (x,y) -> y |> Array.append x)
+            // let rcnt = x0 |> Array2D.length1
+
             let r = yc |> Array.append xc 
             // let m = r |> Array.map (fun x -> x.Length) |> Array.max
+
             let twoDimensionalArray = Array2D.init r.[0].Length r.Length   (fun i j -> r.[j].[i])
             twoDimensionalArray :> obj
 

@@ -425,7 +425,7 @@ module qxl =
                                   | kx.KObject.AString(s0) -> getXParse s0
                                   | _ -> (Array.create rcnt "ExcelEmpty"),Array.create rcnt Star
 
-                        let a = d |> Array.zip [|0 .. lcnt - 1|]
+                        let a = d |> Array.zip [|0 .. rcnt - 1|]
                                 |> Array.map (fun (i,d) -> xtok1dimX arg[i,1 .. ] d) |> Array.map snd
                                 |> Array.toList
                                 |> kx.KObject.AKObject
@@ -659,17 +659,29 @@ module qxl =
         match connectionMaps.ContainsKey uid with
         | false -> "uid not found" :> obj
         | true -> let con = connectionMaps.Item uid
-                  let x,y,z,a,b = xtok x,xtok y,xtok z,xtok a,xtok b
+                  let x1,y1,z1,a1,b1 = xtok x,xtok y,xtok z,xtok a,xtok b
                   
-                  let r = match x,y,z,a,b with
+                  let r = match x1,y1,z1,a1,b1 with
                           | ExcelMissing,_,_,_,_-> con.k(query)
-                          | KObject(x),ExcelMissing,_,_,_-> con.k(query,x)
-                          | KObject(x),KObject(y),ExcelMissing,_,_-> con.k(query,x,y)
-                          | KObject(x),KObject(y),KObject(z),ExcelMissing,_-> con.k(query,x,y,z)
-                          | KObject(x),KObject(y),KObject(z),KObject(a),ExcelMissing-> con.k(query,x,y,z,a)
-                          | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b)-> con.k(query,x,y,z,a,b)
+                          | KObject(x1),ExcelMissing,_,_,_-> con.k(query,x1)
+                          | KObject(x1),KObject(y1),ExcelMissing,_,_-> con.k(query,x1,y1)
+                          | KObject(x1),KObject(y1),KObject(z1),ExcelMissing,_-> con.k(query,x1,y1,z1)
+                          | KObject(x1),KObject(y1),KObject(z1),KObject(a1),ExcelMissing-> con.k(query,x1,y1,z1,a1)
+                          | KObject(x1),KObject(y1),KObject(z1),KObject(a1),KObject(b1)-> con.k(query,x1,y1,z1,a1,b1)
                           // | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b),KObject(c)-> con.k(query,x,y,z,a,b,c)
-                  ktox r
+                  let o = ktox r
+
+                  let o1 = match o,x with
+                           | :? (obj[]) as o0 , (:? (obj[,]) as x0)->
+                                        let rcnt = x0 |> Array2D.length1
+                                        let lcnt = x0 |> Array2D.length2
+                                        match rcnt,lcnt with
+                                        | 1,_  -> o
+                                        | _,1  -> let tmp = o0 |> Array.map (fun x -> [|x|]) |> array2D
+                                                  tmp :> obj
+                                        | _,_  -> o
+                           | _ -> o
+                  o1
 
     let asyncExecute (arg:string) (random) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
         async {
@@ -724,8 +736,20 @@ module qxl =
                                   | KObject(x1),KObject(y1),KObject(z1),KObject(a1),KObject(b1)-> con.k(query,x1,y1,z1,a1,b1)
                                   // | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b),KObject(c)-> con.k(query,x,y,z,a,b,c)
                           let o = ktox r
+
+                          let o1 = match o,x with
+                                   | :? (obj[]) as o0 , (:? (obj[,]) as x0)->
+                                        let rcnt = x0 |> Array2D.length1
+                                        let lcnt = x0 |> Array2D.length2
+                                        match rcnt,lcnt with
+                                        | 1,_  -> o
+                                        | _,1  -> let tmp = o0 |> Array.map (fun x -> [|x|]) |> array2D
+                                                  tmp :> obj
+                                        | _,_  -> o
+                                   | _ -> o
+
                           if argMaps.ContainsKey arg then arg |> argMaps.Remove |> ignore
-                          argMaps.Add(arg,(random,uid,query,x,y,z,a,b,o,System.DateTime.Now))
+                          argMaps.Add(arg,(random,uid,query,x,y,z,a,b,o1,System.DateTime.Now))
                           return o
         }
 
@@ -799,6 +823,11 @@ module qxl =
         | true -> rtd.RtdKdb.objMaps.[uid]
         | false -> r 
 
-    [<ExcelFunction(Description="Provides a ticking clock")>]
+    [<ExcelFunction(Description="Provides rtd access")>]
     let dna_rtd(progId:string) (server:string) (topic:string)=
         XlCall.RTD(progId,server,topic)
+
+    [<ExcelFunction(Description="Provides a ticking clock")>]
+    let dna_clock (progId:obj) =
+        XlCall.RTD("rtdclock.rtdclockserver","","rtdclock.rtdclockserver")
+
