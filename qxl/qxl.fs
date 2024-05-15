@@ -683,7 +683,7 @@ module qxl =
                            | _ -> o
                   o1
 
-    let asyncExecute (arg:string) (random) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
+    let asyncExecute (asCols:bool) (arg:string) (random) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
         async {
                 // let arg = random,uid,query,x,y,z,a,b
                 let query = match query with
@@ -748,9 +748,15 @@ module qxl =
                                         | _,_  -> o
                                    | _ -> o
 
+                          let o2 = match o1,asCols with
+                                   | :? (obj[]) as o0, true -> let tmp = o0 |> Array.map (fun x -> [|x|]) |> array2D
+                                                               tmp :> obj
+                                   | :? (obj[,]) as o0,false -> o1
+                                   | _ -> o1
+
                           if argMaps.ContainsKey arg then arg |> argMaps.Remove |> ignore
-                          argMaps.Add(arg,(random,uid,query,x,y,z,a,b,o1,System.DateTime.Now))
-                          return o
+                          argMaps.Add(arg,(random,uid,query,x,y,z,a,b,o2,System.DateTime.Now))
+                          return o2
         }
 
     [<ExcelFunction(Description="async execute query")>]
@@ -758,11 +764,24 @@ module qxl =
         let arg = dna_cell_reference()
         // let arg = random,uid,query,x,y,z,a,b
         match argMaps.ContainsKey arg with
-        | false -> FsAsyncUtil.excelRunAsync "asyncExecute" [|(arg :> obj); random; uid; query; x; y; z; a; b |] (asyncExecute arg random uid query x y z a b )
+        | false -> FsAsyncUtil.excelRunAsync "asyncExecute" [|(false :> obj);(arg :> obj); random; uid; query; x; y; z; a; b |] (asyncExecute false arg random uid query x y z a b )
         | true -> let (random1,uid1,query1,x1,y1,z1,a1,b1,r,p) = argMaps.Item arg
                   if uid.Equals uid1 && argComparer0 (random,query,x,y,z,a,b) (random1,query1,x1,y1,z1,a1,b1) then r 
                   else 
-                    FsAsyncUtil.excelRunAsync "asyncExecute" [|(arg :> obj); random; uid; query; x; y; z; a; b |] (asyncExecute arg random uid query x y z a b )
+                    FsAsyncUtil.excelRunAsync "asyncExecute" [|(false :> obj);(arg :> obj); random; uid; query; x; y; z; a; b |] (asyncExecute false arg random uid query x y z a b )
+                  // let t = System.DateTime.Now - p
+                  // if t.TotalSeconds < 1 then o else FsAsyncUtil.excelRunAsync "asyncExecute" [|random; (uid :> obj); (query); x; y; z; a; b |] (asyncExecute random uid query x y z a b )
+
+    [<ExcelFunction(Description="async execute query as column")>]
+    let dna_aexecutec (random:obj) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
+        let arg = dna_cell_reference()
+        // let arg = random,uid,query,x,y,z,a,b
+        match argMaps.ContainsKey arg with
+        | false -> FsAsyncUtil.excelRunAsync "asyncExecute" [|(true :> obj);(arg :> obj); random; uid; query; x; y; z; a; b |] (asyncExecute true arg random uid query x y z a b )
+        | true -> let (random1,uid1,query1,x1,y1,z1,a1,b1,r,p) = argMaps.Item arg
+                  if uid.Equals uid1 && argComparer0 (random,query,x,y,z,a,b) (random1,query1,x1,y1,z1,a1,b1) then r 
+                  else 
+                    FsAsyncUtil.excelRunAsync "asyncExecute" [|(true :> obj);(arg :> obj); random; uid; query; x; y; z; a; b |] (asyncExecute true arg random uid query x y z a b )
                   // let t = System.DateTime.Now - p
                   // if t.TotalSeconds < 1 then o else FsAsyncUtil.excelRunAsync "asyncExecute" [|random; (uid :> obj); (query); x; y; z; a; b |] (asyncExecute random uid query x y z a b )
 

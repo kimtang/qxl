@@ -163,17 +163,18 @@ module RtdKdb =
                 
             seq <- seq + 1
 
-            let nkobject = match kobjMaps.ContainsKey id with
-                           | false ->  kobjMaps.Add(id,o)                                       
-                                       o
-                           | true -> let oldkobject =  kobjMaps.[id]
-                                     
-                                     let mo = mergeFlip o oldkobject
-                                     match mo with
-                                     | None -> kobjMaps.[id]<-o
-                                               o
-                                     | Some(mo) -> kobjMaps.[id]<-mo
-                                                   mo
+            let nkobject = match append,kobjMaps.ContainsKey id with
+                           | _,false ->  kobjMaps.Add(id,o)
+                                         o
+                           | 0,true ->   kobjMaps.[id] <- o                           
+                                         o
+                           | _,true -> let oldkobject =  kobjMaps.[id]                                     
+                                       let mo = mergeFlip o oldkobject
+                                       match mo with
+                                       | None -> kobjMaps.[id]<-o
+                                                 o
+                                       | Some(mo) -> kobjMaps.[id]<-mo
+                                                     mo
 
             let o1 = ktox.ktox nkobject
             match objMaps.ContainsKey id with
