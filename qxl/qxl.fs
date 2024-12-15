@@ -5,6 +5,8 @@ open System
 open System.Threading
 open ExcelDna.Integration
 open ExcelDna.Registration.FSharp
+open Microsoft.Office.Interop.Excel
+
 
 module qxl =
     open System.Collections.Generic
@@ -487,19 +489,20 @@ module qxl =
         new Dictionary<string,kx.c>()
 
     [<ExcelFunction(Description="My first .NET function")>]
-    let dna_connection(arg:obj) =
+    let qxl_connection(arg:obj) =
         connectionMaps.Keys |> Seq.toArray :> obj
 
 
     [<ExcelFunction(Description="My first .NET function")>]
-    let dna_cell_reference() =
+    let qxl_cell_reference fnc:string =
         let reference:ExcelReference = XlCall.Excel(XlCall.xlfCaller) |> unbox
         let cellReference:string = XlCall.Excel(XlCall.xlfAddress, 1+reference.RowFirst,1+reference.ColumnFirst) |> unbox
         let sheetName:string = XlCall.Excel(XlCall.xlSheetNm,reference) |> unbox
-        sheetName + cellReference
+
+        fnc + sheetName + cellReference
 
     [<ExcelFunction(Description="My first .NET function")>]
-    let dna_describe (arg:obj) =
+    let qxl_describe (arg:obj) =
         match arg with
         | :? System.DateTime as o-> "DateTime"
         | :? ExcelEmpty as o-> "ExcelEmpty"
@@ -512,9 +515,14 @@ module qxl =
         | :? (obj[,]) as o-> "2d array:" + string( o.GetLength(0)) + "," + string(o.GetLength(1))
         | _ -> "no match"
 
+    [<ExcelFunction(Description="My first .NET function")>]
+    let qxl_get_cell_reference(arg:obj) =
+        let reference:ExcelReference = XlCall.Excel(XlCall.xlfCaller) |> unbox
+        let cellReference:string = XlCall.Excel(XlCall.xlfAddress, 1+reference.RowFirst,1+reference.ColumnFirst) |> unbox
+        cellReference
 
     [<ExcelFunction(Description="open connection")>]
-    let dna_open_connection (uid:string) (host:string) (port:int) (user:string) (passwd:string)=
+    let qxl_open_connection (clock:obj) (uid:string) (host:string) (port:int) (user:string) (passwd:string)=
         match port with
         | 0 -> ExcelMissing :> obj
         | _ ->
@@ -544,7 +552,7 @@ module qxl =
     let csMaps =
         new Dictionary<string,kx.cs>()
 
-    let async_open_connection (uid:string) (host:string) (port:int) (user:string) (passwd:string)=
+    let async_open_connection (clock:obj) (uid:string) (host:string) (port:int) (user:string) (passwd:string)=
         async {
             match port with
             | 0 -> return ExcelMissing :> obj
@@ -559,8 +567,9 @@ module qxl =
                                                  return uid :> obj
                                 | _ -> return "no_con" :> obj                                          
 
-                    | true ->   let con = connectionMaps.Item uid
-                                match con.Connected() with
+                    | true ->   let con = csMaps.Item uid
+                                let! msg = con.Connected()
+                                match msg with
                                 | true -> return  uid :> obj                                                 
                                 | false ->  csMaps.Remove uid |> ignore
                                             let con = new kx.cs()
@@ -613,12 +622,10 @@ module qxl =
         new Dictionary<string,obj*string*obj*obj*obj*obj*obj*obj*obj*System.DateTime>()
 
     [<ExcelFunction(Description="async execute query")>]
-    let dna_aopen_connection (uid:string) (host:string) (port:int) (user:string) (passwd:string)= 
-        FsAsyncUtil.excelRunAsync "async_open_connection" [|uid :> obj; host :> obj; port :> obj; user :> obj ; passwd :> obj |] (async_open_connection uid host port user passwd )
+    let qxl_aopen_connection (clock:obj) (uid:string) (host:string) (port:int) (user:string) (passwd:string)= 
+        FsAsyncUtil.excelRunAsync "async_open_connection" [|clock;uid :> obj; host :> obj; port :> obj; user :> obj ; passwd :> obj |] (async_open_connection clock uid host port user passwd )
 
-    [<ExcelFunction(Description="execute query")>]
-    let dna_execute (random:obj) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
-
+    let qtos (query:obj) =
         let query = match query with
                     | :? string as query-> query
                     | :? (obj[,]) as o ->
@@ -632,7 +639,7 @@ module qxl =
                                                                 )
                                                      |> Array.filter (fun (x,s) -> x)
                                                      |> Array.map (fun (x,s) -> s)
-                                                     |> Array.fold (fun x y -> x + "\n" + y) ""
+                                                     |> Array.reduce (fun x y -> x + "\n" + y)
                                   | 1,_  ->   o[0,*] |> Array.map (fun x -> 
                                                                          match x with
                                                                          | :? string as s -> true,s
@@ -640,7 +647,7 @@ module qxl =
                                                                 )
                                                      |> Array.filter (fun (x,s) -> x)
                                                      |> Array.map (fun (x,s) -> s)
-                                                     |> Array.fold (fun x y -> x + "\n" + y) ""
+                                                     |> Array.reduce (fun x y -> x + "\n" + y)
 
                                   | _,_  ->  let arr = [| for i in  0 .. o.GetLength(0) - 1 -> o.[i,*] |]
                                                        |> Array.map (
@@ -650,11 +657,16 @@ module qxl =
                                                                                                   | :? float as f -> if f=System.Math.Round(f) then sprintf "%i" (int (System.Math.Round(f))) else sprintf "%f" f
                                                                                                                      
                                                                                                   | _ -> ""
-                                                                                        ) |> Array.fold (fun x y -> x + y) "" 
+                                                                                        ) |> Array.reduce (fun x y -> x + y) 
                                                             )
-                                             arr |> Array.fold (fun x y -> x + "\n" + y) ""
+                                             arr |> Array.reduce (fun x y -> x + "\n" + y)
                         arr
                     | _ -> failwith "not a vector"
+        query
+
+    let qxl_execute0 (asCols:bool) (random:obj) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
+
+        let query = qtos query 
 
         match connectionMaps.ContainsKey uid with
         | false -> "uid not found" :> obj
@@ -681,47 +693,134 @@ module qxl =
                                                   tmp :> obj
                                         | _,_  -> o
                            | _ -> o
-                  o1
+                  // o1
+
+                  let o2 = match o1,asCols with
+                           | :? (obj[]) as o0, true -> let tmp = o0 |> Array.map (fun x -> [|x|]) |> array2D
+                                                       tmp :> obj
+                           | :? (obj[,]) as o0,false -> o1
+                           | _,_ -> o1
+                  o2
+
+    [<ExcelFunction(Description="execute query")>]
+    let qxl_execute (random:obj) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
+        qxl_execute0 false random uid query x y z a b
+
+    [<ExcelFunction(Description="execute query")>]
+    let qxl_executec (random:obj) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
+        qxl_execute0 true random uid query x y z a b
+
+    let plotMaps =
+        new Dictionary<string,Microsoft.Office.Interop.Excel.Shape>()    
+
+    [<ExcelFunction(Description="plot result (expect byte array) ")>]
+    let qxl_plot (random:obj) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) = 
+
+        let plotID = qxl_cell_reference "qxl_plot"
+
+        let query = qtos query 
+
+        match connectionMaps.ContainsKey uid with
+        | false -> "uid not found" :> obj
+        | true -> let con = connectionMaps.Item uid
+                  let x1,y1,z1,a1,b1 = xtok x,xtok y,xtok z,xtok a,xtok b
+                  
+                  let r = match x1,y1,z1,a1,b1 with
+                          | ExcelMissing,_,_,_,_-> con.k(query)
+                          | KObject(x1),ExcelMissing,_,_,_-> con.k(query,x1)
+                          | KObject(x1),KObject(y1),ExcelMissing,_,_-> con.k(query,x1,y1)
+                          | KObject(x1),KObject(y1),KObject(z1),ExcelMissing,_-> con.k(query,x1,y1,z1)
+                          | KObject(x1),KObject(y1),KObject(z1),KObject(a1),ExcelMissing-> con.k(query,x1,y1,z1,a1)
+                          | KObject(x1),KObject(y1),KObject(z1),KObject(a1),KObject(b1)-> con.k(query,x1,y1,z1,a1,b1)
+                          // | KObject(x),KObject(y),KObject(z),KObject(a),KObject(b),KObject(c)-> con.k(query,x,y,z,a,b,c)
+                  match r with
+                  | AByte(x) ->
+                                // let arrBytes = System.Text.Encoding.UTF8.GetBytes(x)
+                                let filepath = System.IO.Path.ChangeExtension(System.IO.Path.GetTempFileName(), ".png")
+                                System.IO.File.WriteAllBytes(filepath, x) // Requires System.IO
+                                let img = System.Drawing.Image.FromFile(filepath)
+                                let reference:ExcelReference = XlCall.Excel(XlCall.xlfCaller) |> unbox
+
+                                let app:Microsoft.Office.Interop.Excel._Application = ExcelDnaUtil.Application |> unbox
+                                let ws:Microsoft.Office.Interop.Excel._Worksheet = app.ActiveSheet|> unbox
+
+                                let shapes = seq{for s in ws.Shapes -> s,s.Name } |> Seq.filter (fun (x,n) -> n=plotID)
+                                let cell = ws.Cells.[reference.RowFirst+ 1,reference.ColumnFirst+1] :?> Microsoft.Office.Interop.Excel.Range
+                                let rh = cell.Left :?>float
+                                let cw = cell.Top :?>float                                
+
+                                match shapes |> Seq.length > 0 with
+                                | true ->
+                                            let s = shapes |> Seq.head |> fun (x,n) -> x
+                                            let left = s.Left
+                                            let top = s.Top
+                                            let width = s.Width
+                                            let height = s.Height
+                                            s.Delete()
+                                            let shape = ws.Shapes.AddPicture(filepath,Microsoft.Office.Core.MsoTriState.msoFalse,
+                                                Microsoft.Office.Core.MsoTriState.msoCTrue,left,top,width,height)
+                                            shape.Name <- plotID
+                                            ()
+                                            // shape.Visible<-Microsoft.Office.Core.MsoTriState.msoTrue
+
+                                |false ->
+                                            let shape = ws.Shapes.AddPicture(filepath,Microsoft.Office.Core.MsoTriState.msoFalse,
+                                                Microsoft.Office.Core.MsoTriState.msoCTrue,
+                                                (float32)cw,(float32)rh,(float32)img.Width,(float32)img.Height)
+                                            shape.Name <- plotID
+
+                                filepath :> obj
+                  | AChar(x) ->
+                                // let arrBytes = System.Text.Encoding.UTF8.GetBytes(x)
+                                let x = x |> Array.map (fun x -> (byte) x)
+                                let filepath = System.IO.Path.ChangeExtension(System.IO.Path.GetTempFileName(), ".png")
+                                System.IO.File.WriteAllBytes(filepath, x) // Requires System.IO
+                                let img = System.Drawing.Image.FromFile(filepath)
+                                let reference:ExcelReference = XlCall.Excel(XlCall.xlfCaller) |> unbox
+
+                                let app:Microsoft.Office.Interop.Excel._Application = ExcelDnaUtil.Application |> unbox
+                                let ws:Microsoft.Office.Interop.Excel._Worksheet = app.ActiveSheet|> unbox
+
+                                let shapes = seq{for s in ws.Shapes -> s,s.Name } |> Seq.filter (fun (x,n) -> n=plotID)
+                                let cell = ws.Cells.[reference.RowFirst + 1,reference.ColumnFirst+1] :?> Microsoft.Office.Interop.Excel.Range
+                                let rh = cell.Left :?>float
+                                let cw = cell.Top :?>float                                
+
+                                match shapes |> Seq.length > 0 with
+                                | true ->
+                                            let s = shapes |> Seq.head |> fun (x,n) -> x
+                                            let left = s.Left
+                                            let top = s.Top
+                                            let width = s.Width
+                                            let height = s.Height
+                                            s.Delete()
+                                            let shape = ws.Shapes.AddPicture(filepath,Microsoft.Office.Core.MsoTriState.msoFalse,
+                                                Microsoft.Office.Core.MsoTriState.msoCTrue,
+                                                left,top,width,height)
+                                            shape.Name <- plotID
+                                            ()
+                                            // shape.Visible<-Microsoft.Office.Core.MsoTriState.msoTrue
+
+                                |false ->
+                                            let shape = ws.Shapes.AddPicture(filepath,Microsoft.Office.Core.MsoTriState.msoFalse,
+                                                Microsoft.Office.Core.MsoTriState.msoCTrue,
+                                                (float32)cw,(float32)rh,(float32)img.Width,(float32)img.Height)
+                                            shape.Name <- plotID
+
+                                filepath :> obj
+                  | _ -> "Not Char array" :> obj
+
+
+    [<ExcelFunction(Description="execute query")>]
+    let qxl_lexecute (random:obj) (uid:string) (query:obj) (x:obj)= 
+        let x = qtos x :> obj
+        qxl_execute0 (false) (random)(uid)("{[x;y](first string x) string y}" :> obj)(query)(x)(ExcelDna.Integration.ExcelMissing.Value :> obj)(ExcelDna.Integration.ExcelMissing.Value :> obj)(ExcelDna.Integration.ExcelMissing.Value :> obj)
+
 
     let asyncExecute (asCols:bool) (arg:string) (random) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
         async {
                 // let arg = random,uid,query,x,y,z,a,b
-                let query = match query with
-                            | :? string as query-> query
-                            | :? (obj[,]) as o ->
-                                let rcnt = o |> Array2D.length1
-                                let lcnt = o |> Array2D.length2
-                                let arr = match rcnt,lcnt with
-                                          | _,1  ->   o[*,0] |> Array.map (fun x -> 
-                                                                                 match x with
-                                                                                 | :? string as s -> true,s
-                                                                                 | _ -> false,""
-                                                                        )
-                                                             |> Array.filter (fun (x,s) -> x)
-                                                             |> Array.map (fun (x,s) -> s)
-                                                             |> Array.fold (fun x y -> x + "\n" + y) ""
-                                          | 1,_  ->   o[0,*] |> Array.map (fun x -> 
-                                                                                 match x with
-                                                                                 | :? string as s -> true,s
-                                                                                 | _ -> false,""
-                                                                        )
-                                                             |> Array.filter (fun (x,s) -> x)
-                                                             |> Array.map (fun (x,s) -> s)
-                                                             |> Array.fold (fun x y -> x + "\n" + y) ""
-
-                                          | _,_  ->  let arr = [| for i in  0 .. o.GetLength(0) - 1 -> o.[i,*] |]
-                                                               |> Array.map (
-                                                                    fun x -> x |> Array.map(    fun x0 -> match x0 with
-                                                                                                          | :? string as s -> s
-                                                                                                          | :? bool as b -> if b then "1b" else "0b"
-                                                                                                          | :? float as f -> if f=System.Math.Round(f) then sprintf "%i" (int (System.Math.Round(f))) else sprintf "%f" f
-                                                                                                                     
-                                                                                                          | _ -> ""
-                                                                                                ) |> Array.fold (fun x y -> x + y) "" 
-                                                                    )
-                                                     arr |> Array.fold (fun x y -> x + "\n" + y) ""
-                                arr
-                            | _ -> failwith "not a vector"
+                let query = qtos query
 
                 match csMaps.ContainsKey uid with
                 | false -> return "uid not found" :> obj
@@ -760,8 +859,8 @@ module qxl =
         }
 
     [<ExcelFunction(Description="async execute query")>]
-    let dna_aexecute (random:obj) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
-        let arg = dna_cell_reference()
+    let qxl_aexecute (random:obj) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
+        let arg = qxl_cell_reference "qxl_aexecute"
         // let arg = random,uid,query,x,y,z,a,b
         match argMaps.ContainsKey arg with
         | false -> FsAsyncUtil.excelRunAsync "asyncExecute" [|(false :> obj);(arg :> obj); random; uid; query; x; y; z; a; b |] (asyncExecute false arg random uid query x y z a b )
@@ -772,9 +871,15 @@ module qxl =
                   // let t = System.DateTime.Now - p
                   // if t.TotalSeconds < 1 then o else FsAsyncUtil.excelRunAsync "asyncExecute" [|random; (uid :> obj); (query); x; y; z; a; b |] (asyncExecute random uid query x y z a b )
 
+
+    [<ExcelFunction(Description="async execute query")>]
+    let qxl_laexecute (random:obj) (uid:string) (query:obj) (x:obj)=
+        let x = qtos x :> obj
+        qxl_aexecute(random)(uid)("{[x;y](first string x) string y}" :> obj)(query)(x)(ExcelDna.Integration.ExcelMissing.Value :> obj)(ExcelDna.Integration.ExcelMissing.Value :> obj)(ExcelDna.Integration.ExcelMissing.Value :> obj)
+
     [<ExcelFunction(Description="async execute query as column")>]
-    let dna_aexecutec (random:obj) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
-        let arg = dna_cell_reference()
+    let qxl_aexecutec (random:obj) (uid:string) (query:obj) (x:obj) (y:obj) (z:obj) (a:obj) (b:obj) =
+        let arg = qxl_cell_reference "qxl_aexecutec"
         // let arg = random,uid,query,x,y,z,a,b
         match argMaps.ContainsKey arg with
         | false -> FsAsyncUtil.excelRunAsync "asyncExecute" [|(true :> obj);(arg :> obj); random; uid; query; x; y; z; a; b |] (asyncExecute true arg random uid query x y z a b )
@@ -785,10 +890,13 @@ module qxl =
                   // let t = System.DateTime.Now - p
                   // if t.TotalSeconds < 1 then o else FsAsyncUtil.excelRunAsync "asyncExecute" [|random; (uid :> obj); (query); x; y; z; a; b |] (asyncExecute random uid query x y z a b )
 
-        
+    [<ExcelFunction(Description="async execute query")>]
+    let qxl_laexecutec (random:obj) (uid:string) (query:obj) (x:obj)=
+        let x = qtos x :> obj
+        qxl_aexecutec(random)(uid)("{[x;y](first string x) string y}" :> obj)(query)(x)(ExcelDna.Integration.ExcelMissing.Value :> obj)(ExcelDna.Integration.ExcelMissing.Value :> obj)(ExcelDna.Integration.ExcelMissing.Value :> obj)        
 
     [<ExcelFunction(Description="execute query")>]
-    let dna_close_connection (uid:string)  =
+    let qxl_close_connection (uid:string)  =
         match connectionMaps.ContainsKey uid with
         | false -> ()
         | true -> connectionMaps.Item(uid).close()
@@ -815,12 +923,12 @@ module qxl =
 
     // Excel function to start the timer - using the fact that F# events implement IObservable
     [<ExcelFunction(Description="start timer")>]
-    let dna_startTimer timerInterval timerDuration =
+    let qxl_startTimer timerInterval timerDuration =
         FsAsyncUtil.excelObserve "startTimer" [|float timerInterval; float timerDuration|] (createTimer timerInterval timerDuration)
 
 
     [<ExcelFunction(Description="Create subscriber")>]
-    let dna_open_subscriber (uid:string) (host:string) (port:int) (user:string) (passwd:string) (sub:string) (append:int)=
+    let qxl_open_subscriber (uid:string) (host:string) (port:int) (user:string) (passwd:string) (sub:string) (append:int)=
         match port with
         | 0 -> ExcelMissing :> obj
         | _ ->
@@ -836,17 +944,17 @@ module qxl =
 
 
     [<ExcelFunction(Description="subscribe to table and sym")>]
-    let dna_subscribe (uid:string) =
+    let qxl_subscribe (uid:string) =
         let r = XlCall.RTD("rtdkdb.rtdkdbserver","",uid)
         match rtd.RtdKdb.objMaps.ContainsKey uid with
         | true -> rtd.RtdKdb.objMaps.[uid]
         | false -> r 
 
     [<ExcelFunction(Description="Provides rtd access")>]
-    let dna_rtd(progId:string) (server:string) (topic:string)=
+    let qxl_rtd(progId:string) (server:string) (topic:string)=
         XlCall.RTD(progId,server,topic)
 
     [<ExcelFunction(Description="Provides a ticking clock")>]
-    let dna_clock (progId:obj) =
+    let qxl_clock (progId:obj) =
         XlCall.RTD("rtdclock.rtdclockserver","","rtdclock.rtdclockserver")
 

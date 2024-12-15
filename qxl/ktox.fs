@@ -2,6 +2,7 @@
 module ktox
 
 open kx
+open ExcelDna.Integration
 
 let Timestamp_null = System.DateTime.Parse("22/09/1707 00:12:43")
 let Month_null = System.DateTime.Parse("01/01/0001 00:00:00")
@@ -13,21 +14,21 @@ let Second_null = System.TimeSpan.Parse("-03:14:08")
 let TimeSpan_null = System.TimeSpan.Parse("-24.20:31:23.6480000")
 let nullObj = "" :> obj
 
-let isNullShort (x:int16) = if x = -32768s then ("0nh" :> obj) else  x |> float :> obj
-let isNullInt (x:int) = if x = -2147483648 then ("0ni" :> obj) else  x |> float :> obj
-let isNullLong (x:int64) = if x = -9223372036854775808L then ("0nj" :> obj) else  x |> float :> obj
-let isNullReal (x:single) = if System.Single.IsNaN(x) then ("0ne" :> obj) else  x |> float :> obj
-let isNullFloat (x:double) = if System.Double.IsNaN(x) then ("0nf" :> obj) else  x :> obj
-let isNullChar (x:char) = if x.Equals(' ') then (" " :> obj) else  x |> string :> obj
+let isNullShort (x:int16) = if x = -32768s then ("":> obj) else  x |> float :> obj
+let isNullInt (x:int) = if x = -2147483648 then ("" :> obj) else  x |> float :> obj
+let isNullLong (x:int64) = if x = -9223372036854775808L then ("" :> obj) else  x |> float :> obj
+let isNullReal (x:single) = if System.Single.IsNaN(x) then ("" :> obj) else  x |> float :> obj
+let isNullFloat (x:double) = if System.Double.IsNaN(x) then ("" :> obj) else  x :> obj
+let isNullChar (x:char) = if x.Equals(' ') then ("" :> obj) else  x |> string :> obj
 let isNullString (x:string) = if x.Equals("") then ("" :> obj) else  x :> obj 
-let isNullTimestamp (x:System.DateTime) = if x.Ticks = 538589095631452241L then ("0np" :> obj) else  x :> obj
-let isNullMonth (x:System.DateTime) = if x.Ticks = 0L then ("0nm" :> obj) else  x :> obj
-let isNullDate (x:System.DateTime) = if x.Ticks = 0L  then ("0nd" :> obj) else  x :> obj
-let isNullDateTime (x:System.DateTime) = if x.Ticks = 0L then ("0nt" :> obj) else  x :> obj
-let isNullKTimespan (x:System.TimeSpan) = if x.Ticks = -92233720368547758L  then ("0nn" :> obj) else  (x.TotalDays :> obj)
-let isNullMinute (x:System.TimeSpan) = if x.Ticks = -1288490188800000000L  then ("0nu" :> obj) else  x.TotalDays :> obj
-let isNullSecond (x:System.TimeSpan) = if x.Ticks = -116480000000L  then ("0nv" :> obj) else  x.TotalDays :> obj
-let isNullTimeSpan (x:System.TimeSpan) = if x.Ticks = -21474836480000L  then ("0nn" :> obj) else  x.TotalDays :> obj
+let isNullTimestamp (x:System.DateTime) = if x.Ticks = 538589095631452241L then ("" :> obj) else  x :> obj
+let isNullMonth (x:System.DateTime) = if x.Ticks = 0L then ("" :> obj) else  x :> obj
+let isNullDate (x:System.DateTime) = if x.Ticks = 0L  then ("" :> obj) else  x :> obj
+let isNullDateTime (x:System.DateTime) = if x.Ticks = 0L then ("" :> obj) else  x :> obj
+let isNullKTimespan (x:System.TimeSpan) = if x.Ticks = -92233720368547758L  then ("" :> obj) else  (x.TotalDays :> obj)
+let isNullMinute (x:System.TimeSpan) = if x.Ticks = -1288490188800000000L  then ("" :> obj) else  x.TotalDays :> obj
+let isNullSecond (x:System.TimeSpan) = if x.Ticks = -116480000000L  then ("" :> obj) else  x.TotalDays :> obj
+let isNullTimeSpan (x:System.TimeSpan) = if x.Ticks = -21474836480000L  then ("" :> obj) else  x.TotalDays :> obj
 
 
 let is_nan(k:KObject) = 
@@ -319,14 +320,22 @@ let ktox( k:KObject) =
     | ASecond(x) -> ASecond(x) |> conv_as_array1  :> obj
     | ATimeSpan(x) -> ATimeSpan(x) |> conv_as_array1  :> obj
     | Dict(x,y) -> 
-        match y with 
-        | Flip(a,b) ->
-            let xc = x |> conv_as_array1 |> Array.append [|("" :> obj)|]
-            let yc = conv_as_matrix0 y        
-            let r = yc |> Array.zip xc |> Array.map (fun (x,y) -> Array.append [|x|] y)
-            let twoDimensionalArray = Array2D.init r.Length r.[0].Length    (fun i j -> r.[i].[j])
+        match x,y with 
+//        | Flip(a,b) ->
+//            let xc = x |> conv_as_array1 |> Array.append [|("" :> obj)|]
+//            let yc = conv_as_matrix0 y        
+//            let r = yc |> Array.zip xc |> Array.map (fun (x,y) -> Array.append [|x|] y)
+//            let twoDimensionalArray = Array2D.init r.Length r.[0].Length    (fun i j -> r.[i].[j])
+//            twoDimensionalArray :> obj
+        | Flip(a,b),Flip(c,d) ->
+            let xs = Array.concat [a;c] |> Array.map (fun x -> [|x :> obj|])
+            let y = List.concat [b;d]
+            let yc = y |> List.map conv_as_array1  |> List.toArray
+            // get the size an merge it together
+            let r = xs |> Array.zip yc |> Array.map (fun (x,y) -> x |> Array.append y)
+            let twoDimensionalArray = Array2D.init r.[0].Length r.Length  (fun i j -> r.[j].[i])
             twoDimensionalArray :> obj
-        | _ ->
+        | _,_ ->
             let xc = conv_as_matrix0 x
             let yc = conv_as_matrix1 y
             let yc = match yc.Length with

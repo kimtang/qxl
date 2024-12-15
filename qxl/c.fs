@@ -791,7 +791,8 @@ type cMessages =
     | KMessage5 of string*KObject*KObject*KObject*KObject*KObject*AsyncReplyChannel<KObject>
     | KMessage6 of string*KObject*KObject*KObject*KObject*KObject*KObject*AsyncReplyChannel<KObject>
     | KMessage7 of AsyncReplyChannel<KObject>
-    | KMessage8 of KObject*AsyncReplyChannel<KObject>    
+    | KMessage8 of KObject*AsyncReplyChannel<KObject>
+    | KMessage9 of AsyncReplyChannel<bool>
 
     | KSMessage0 of string
     | KSMessage1 of string*KObject
@@ -859,6 +860,12 @@ type cs() =
                 | null -> replyChannel.Reply(KObject.ERROR("no_con"))
                 | _ ->  replyChannel.Reply(con.k(k1))
 
+            | KMessage9(replyChannel) ->
+                match con with
+                | null -> replyChannel.Reply(false)
+                | _ ->  let b = con.Connected()
+                        replyChannel.Reply(b) 
+
             | KSMessage0(s) -> 
                 match con with
                 | null -> ()
@@ -904,6 +911,9 @@ type cs() =
 
     member this.Init(h:string,p:int,u:string) : Async<string> =
         mailbox.PostAndAsyncReply( fun reply -> Init(h,p,u,reply))
+
+    member this.Connected() : Async<bool> =
+        mailbox.PostAndAsyncReply(fun reply -> KMessage9(reply))
     
     member this.k(s:string) : Async<KObject> =
         mailbox.PostAndAsyncReply( fun reply -> KMessage0(s,reply))    
