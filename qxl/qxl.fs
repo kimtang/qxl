@@ -85,299 +85,395 @@ module qxl =
                                         | :? string as o-> kx.KObject.String(o)
                                         | :? float as o-> kx.KObject.Float(o)
                                         ) |> Array.toList |> kx.KObject.AKObject
-               XMix,r        
+               XMix,r
 
     let xtok1dimStar (arg:obj array) =
-        let r = match arg.Length with
-                | 1 -> match arg.[0] with
-                       | :? ExcelEmpty -> XExcelEmpty,kx.KObject.String("ExcelEmpty")
-                       | :? ExcelError -> XExcelError,kx.KObject.String("ExcelError")
-                       | :? ExcelMissing -> XExcelMissing,kx.KObject.String("ExcelMissing")
-                       | :? bool as o-> XBool ,kx.KObject.Bool(o)
-                       | :? string as o-> XString ,kx.KObject.String(o)
-                       | :? float as o-> XFloat,kx.KObject.Float(o)
-                | _ -> xtok1dim arg
-        r
+
+        let cnt = Array.length arg
+        let r= arg |> Array.map ( fun y -> 
+                                            match y with
+                                            | :? ExcelEmpty -> XExcelEmpty 
+                                            | :? ExcelError -> XExcelError 
+                                            | :? ExcelMissing -> XExcelMissing
+                                            | :? bool as o-> XBool
+                                            | :? string as o-> XString
+                                            | :? float as o-> XFloat
+                                            ) |> Array.distinct |> Array.length
+        match r with
+        | 1 ->  let oo = arg[0]
+                let r = match oo with
+                        | :? ExcelEmpty -> XExcelEmpty,Array.create cnt "ExcelEmpty" |> kx.KObject.AString
+                        | :? ExcelError -> XExcelError,Array.create cnt "ExcelError" |> kx.KObject.AString
+                        | :? ExcelMissing -> XExcelMissing,Array.create cnt "ExcelMissing" |> kx.KObject.AString 
+                        | :? bool -> XBool ,arg |> Array.map (fun x -> x :?> bool) |> kx.KObject.ABool
+                        | :? string -> XMix ,arg |> Array.map (fun x -> x :?> string )|> Array.map (fun x -> kx.KObject.AChar(x.ToCharArray())) |> Array.toList |> kx.KObject.AKObject
+                        | :? float -> XFloat ,arg |> Array.map (fun x -> x :?> float) |> kx.KObject.AFloat
+                r
+        | _ -> let r = arg |>Array.toList|> List.fold ( fun x y -> 
+                                            match y with
+                                            | :? ExcelEmpty -> x
+                                            | :? ExcelError -> x
+                                            | :? ExcelMissing -> x
+                                            | :? bool as o-> x@[kx.KObject.Bool(o)]
+                                            | :? string as o-> x@[kx.KObject.AChar(o.ToCharArray())]
+                                            | :? float as o-> x@[kx.KObject.Float(o)]
+                                        ) [] 
+               match List.length r with
+               | 0 -> XExcelEmpty,kx.KObject.String("ExcelEmpty")
+               | 1 -> XMix,r.[0]
+               | _ -> XMix,(r |> kx.KObject.AKObject)
 
     let xtok1dimB (arg:obj array) = 
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> o
-                                           | :? string as o-> match o with
-                                                              | "1b" -> true
-                                                              | "0b" -> false
-                                                              | "TRUE" -> true
-                                                              | "False" -> false
-                                           | :? float as o-> if o<1 then false else true
-                                           | _ -> false
-                         )
+        let r = arg |> Array.fold (fun x y -> match y with
+                                              | :? ExcelEmpty -> x
+                                              | :? ExcelError -> x
+                                              | :? ExcelMissing -> x
+                                              | :? bool as o-> [|o|] |> Array.append x
+                                              | :? string as o-> let a = match o with
+                                                                         | "1b" -> true
+                                                                         | "0b" -> false
+                                                                         | "TRUE" -> true
+                                                                         | "False" -> false
+                                                                 [|a|] |> Array.append x
+                                              | :? float as o-> [|(if o<1 then false else true)|] |> Array.append x
+                                              | _ -> [|false|] |> Array.append x
+                         ) [||]
         match r.Length with
         | 1 -> XBool,kx.KObject.Bool(r.[0])
         | _ -> XBool,kx.KObject.ABool(r)
 
 
     let xtok1dimG (arg:obj array) = 
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> System.Guid.Empty
-                                           | :? string as o-> 
-                                                    try
-                                                        System.Guid.Parse(o)
-                                                    with
-                                                        | _ -> System.Guid.Empty
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|System.Guid.Empty|] |> Array.append x
+                                               | :? string as o-> let a =  
+                                                                    try
+                                                                        System.Guid.Parse(o)
+                                                                    with
+                                                                        | _ -> System.Guid.Empty
+                                                                  [|a|] |> Array.append x 
 
-                                           | :? float as o-> System.Guid.Empty
-                                           | _ -> System.Guid.Empty
-                         )
+                                               | :? float as o-> [|System.Guid.Empty|] |> Array.append x
+                                               | _ -> [|System.Guid.Empty|] |> Array.append x
+                         ) [||]
         match r.Length with
         | 1 -> XBool,kx.KObject.Guid(r.[0])
         | _ -> XFloat,kx.KObject.AGuid(r)
         
 
     let xtok1dimX0 (arg:obj array) = 
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> if o then 1uy else 0uy
-                                           | :? string as o-> 
-                                                    try
-                                                        byte(o)
-                                                    with
-                                                        | _ -> 0uy
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|(if o then 1uy else 0uy)|] |> Array.append x
+                                               | :? string as o-> let a = 
+                                                                    try
+                                                                        byte(o)
+                                                                    with
+                                                                        | _ -> 0uy
+                                                                  [|a|] |> Array.append x
 
-                                           | :? float as o-> byte(o)
-                                           | _ -> 0uy
-                         )
+                                               | :? float as o-> [|byte(o)|] |> Array.append x
+                                               | _ -> [|0uy|] |> Array.append x
+                             )[||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.Byte(r.[0])
         | _ -> XFloat,kx.KObject.AByte(r)
 
     let xtok1dimH (arg:obj array) =
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> if o then 1s else 0s
-                                           | :? string as o-> 
-                                                    try
-                                                        int16(o)
-                                                    with
-                                                        | _ -> 0s
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|(if o then 1s else 0s)|] |>Array.append x
+                                               | :? string as o-> let a =
+                                                                    try
+                                                                        int16(o)
+                                                                    with
+                                                                        | _ -> 0s
+                                                                  [|a|] |>Array.append x
 
-                                           | :? float as o-> int16(o)
-                                           | _ -> 0s
-                         )
+                                               | :? float as o-> [|int16(o)|] |>Array.append x
+                                               | _ -> [|0s|] |>Array.append x 
+                         ) [||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.Short(r.[0])
         | _ -> XFloat,kx.KObject.AShort(r)    
         
     let xtok1dimI (arg:obj array) = 
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> if o then 1 else 0
-                                           | :? string as o-> 
-                                                    try
-                                                        int(o)
-                                                    with
-                                                        | _ -> 0
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|(if o then 1 else 0)|] |> Array.append x
+                                               | :? string as o-> let a = 
+                                                                    try
+                                                                        int(o)
+                                                                    with
+                                                                        | _ -> 0
+                                                                  [|a|] |> Array.append x
 
-                                           | :? float as o-> int(o)
-                                           | _ -> 0
-                         )
+                                               | :? float as o-> [|int(o)|] |> Array.append x 
+                                               | _ -> [|0|] |> Array.append x 
+
+                             ) [||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.Int(r.[0])
         | _ ->XFloat,kx.KObject.AInt(r)
 
     let xtok1dimJ (arg:obj array) = 
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> if o then 1L else 0L
-                                           | :? string as o-> 
-                                                    try
-                                                        int64(o)
-                                                    with
-                                                        | _ -> 0L
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|(if o then 1L else 0L)|] |> Array.append x 
+                                               | :? string as o-> let a = 
+                                                                    try
+                                                                        int64(o)
+                                                                    with
+                                                                        | _ -> 0L
+                                                                  [|a|] |> Array.append x
 
-                                           | :? float as o-> int64(o)
-                                           | _ -> 0L
-                         )
+                                               | :? float as o->[|int64(o)|] |> Array.append x
+                                               | _ -> [|0L|] |> Array.append x
+                             ) [||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.Long(r.[0])
         | _ -> XFloat,kx.KObject.ALong(r)
 
     let xtok1dimE (arg:obj array) = 
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> if o then 1.0f else 0.0f
-                                           | :? string as o-> 
-                                                    try
-                                                        single(o)
-                                                    with
-                                                        | _ -> 0.0f
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|(if o then 1.0f else 0.0f)|] |> Array.append x
+                                               | :? string as o-> let a =
+                                                                    try
+                                                                        single(o)
+                                                                    with
+                                                                        | _ -> 0.0f
+                                                                  [|a|] |> Array.append x
 
-                                           | :? float as o-> single(o)
-                                           | _ -> 0.0f
-                         )
+                                               | :? float as o-> [|single(o)|] |> Array.append x 
+                                               | _ -> [|0.0f|] |> Array.append x 
+                             ) [||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.Real(r.[0])
         | _ ->XFloat,kx.KObject.AReal(r)
 
     let xtok1dimF (arg:obj array) = 
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> if o then 1.0 else 0.0
-                                           | :? string as o-> 
-                                                    try
-                                                        float(o)
-                                                    with
-                                                        | _ -> 0.0
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|(if o then 1.0 else 0.0)|] |> Array.append x 
+                                               | :? string as o-> let a =
+                                                                    try
+                                                                        float(o)
+                                                                    with
+                                                                        | _ -> 0.0
+                                                                  [|a|] |> Array.append x
 
-                                           | :? float as o-> float(o)
-                                           | _ -> 0.0
-                         )
+                                               | :? float as o-> [|float(o)|] |> Array.append x 
+                                               | _ -> [|0.0|] |> Array.append x 
+                             ) [||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.Float(r.[0])
         | _ ->XFloat,kx.KObject.AFloat(r)
 
     let xtok1dimC (arg:obj array) = 
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> if o then '1' else '0'
-                                           | :? string as o-> 
-                                                    match o.Length with
-                                                    | 0 -> '0'
-                                                    | _ -> o.Chars(0)
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|(if o then '1' else '0')|] |> Array.append x  
+                                               | :? string as o-> let a =
+                                                                    match o.Length with
+                                                                    | 0 -> '0'
+                                                                    | _ -> o.Chars(0)
+                                                                  [|a|] |> Array.append x
                                                     
-                                           | :? float as o-> '0'
-                                           | _ -> '0'
-                         )
+                                               | :? float as o-> [|'0'|] |> Array.append x 
+                                               | _ -> [|'0'|] |> Array.append x 
+                             ) [||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.Char(r.[0])
         | _ ->XFloat,kx.KObject.AChar(r)
 
     let xtok1dimS (arg:obj array) = 
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> if o then "true" else "false"
-                                           | :? string as o-> o
-                                           | :? float as o-> string(o)
-                                           | _ -> ""
-                         )
+        let r = arg |> Array.fold (fun x y -> match y with
+                                              | :? ExcelEmpty -> x
+                                              | :? ExcelError -> x
+                                              | :? ExcelMissing -> x
+                                              | :? bool as o-> [|(if o then "true" else "false")|] |>  Array.append x
+                                              | :? string as o-> [|o|] |> Array.append x
+                                              | :? float as o-> [|string(o)|] |> Array.append x 
+                                              | _ -> x
+                         ) [||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.String(r.[0])
         | _ ->XFloat,kx.KObject.AString(r)
 
     let xtok1dimP (arg:obj array) = 
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> System.DateTime(538589095631452241L)
-                                           | :? string as o-> 
-                                                    try
-                                                        System.DateTime.Parse(o)
-                                                    with
-                                                        | _ -> System.DateTime(538589095631452241L)
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|System.DateTime(538589095631452241L)|] |> Array.append x 
+                                               | :? string as o-> let a =
+                                                                    try
+                                                                        System.DateTime.Parse(o)
+                                                                    with
+                                                                        | _ -> System.DateTime(538589095631452241L)
+                                                                  [|a|] |> Array.append x
 
-                                           | :? float as o-> System.DateTime.FromOADate(o)
-                                           | _ -> System.DateTime(538589095631452241L)
-                         )
+                                               | :? float as o-> [|System.DateTime.FromOADate(o)|] |> Array.append x 
+                                               | _ -> [|System.DateTime(538589095631452241L)|] |> Array.append x 
+                             )[||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.Timestamp(r.[0])
         | _ ->XFloat,kx.KObject.ATimestamp(r)
 
     let xtok1dimM (arg:obj array) = 
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> System.DateTime(538589095631452241L)
-                                           | :? string as o-> 
-                                                    try
-                                                        System.DateTime.Parse(o)
-                                                    with
-                                                        | _ -> System.DateTime(538589095631452241L)
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|System.DateTime(538589095631452241L)|] |> Array.append x 
+                                               | :? string as o-> let a =
+                                                                    try
+                                                                        System.DateTime.Parse(o)
+                                                                    with
+                                                                        | _ -> System.DateTime(538589095631452241L)
+                                                                  [|a|] |> Array.append x
 
-                                           | :? float as o-> System.DateTime.FromOADate(o)
-                                           | _ -> System.DateTime(538589095631452241L)
-                         )
+                                               | :? float as o-> [|System.DateTime.FromOADate(o)|] |> Array.append x 
+                                               | _ -> [|System.DateTime(538589095631452241L)|] |> Array.append x 
+                             ) [||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.Month(r.[0])
         | _ ->XFloat,kx.KObject.AMonth(r)
 
     let xtok1dimD (arg:obj array) =
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> System.DateTime(538589095631452241L)
-                                           | :? string as o-> 
-                                                    try
-                                                        System.DateTime.Parse(o)
-                                                    with
-                                                        | _ -> System.DateTime(538589095631452241L)
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|System.DateTime(538589095631452241L)|] |> Array.append x 
+                                               | :? string as o-> let a =
+                                                                    try
+                                                                        System.DateTime.Parse(o)
+                                                                    with
+                                                                        | _ -> System.DateTime(538589095631452241L)
+                                                                  [|a|] |> Array.append x
 
-                                           | :? float as o-> System.DateTime.FromOADate(o)
-                                           | _ -> System.DateTime(538589095631452241L)
-                         )
+                                               | :? float as o-> [|System.DateTime.FromOADate(o)|] |> Array.append x 
+                                               | _ -> [|System.DateTime(538589095631452241L)|] |> Array.append x 
+                             ) [||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.Date(r.[0])
         | _ ->XFloat,kx.KObject.ADate(r)
 
     let xtok1dimZ (arg:obj array) = 
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> System.DateTime(538589095631452241L)
-                                           | :? string as o-> 
-                                                    try
-                                                        System.DateTime.Parse(o)
-                                                    with
-                                                        | _ -> System.DateTime(538589095631452241L)
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|System.DateTime(538589095631452241L)|] |> Array.append x 
+                                               | :? string as o-> let a =
+                                                                    try
+                                                                        System.DateTime.Parse(o)
+                                                                    with
+                                                                        | _ -> System.DateTime(538589095631452241L)
+                                                                  [|a|] |> Array.append x
 
-                                           | :? float as o-> System.DateTime.FromOADate(o)
-                                           | _ -> System.DateTime(538589095631452241L)
-                         )
+                                               | :? float as o-> [|System.DateTime.FromOADate(o)|] |> Array.append x 
+                                               | _ -> [|System.DateTime(538589095631452241L)|] |> Array.append x 
+                             ) [||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.DateTime(r.[0])
         | _ ->XFloat,kx.KObject.ADateTime(r)
 
     let xtok1dimN (arg:obj array) = 
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> System.TimeSpan(-21474836480000L)
-                                           | :? string as o-> 
-                                                    try
-                                                        System.TimeSpan.Parse(o)
-                                                    with
-                                                        | _ -> System.TimeSpan(-21474836480000L)
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|System.TimeSpan(-21474836480000L)|] |> Array.append x 
+                                               | :? string as o-> let a =
+                                                                    try
+                                                                        System.TimeSpan.Parse(o)
+                                                                    with
+                                                                        | _ -> System.TimeSpan(-21474836480000L)
+                                                                  [|a|] |> Array.append x
 
-                                           | :? float as o-> System.TimeSpan.FromSeconds(o)
-                                           | _ -> System.TimeSpan(-21474836480000L)
-                         )
+                                               | :? float as o-> [|System.TimeSpan.FromSeconds(o)|] |> Array.append x 
+                                               | _ -> [|System.TimeSpan(-21474836480000L)|] |> Array.append x 
+                             ) [||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.TimeSpan(r.[0])
         | _ ->XFloat,kx.KObject.ATimeSpan(r)
 
     let xtok1dimU (arg:obj array) = 
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> System.TimeSpan(-21474836480000L)
-                                           | :? string as o-> 
-                                                    try
-                                                        System.TimeSpan.Parse(o)
-                                                    with
-                                                        | _ -> System.TimeSpan(-21474836480000L)
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|System.TimeSpan(-21474836480000L)|] |> Array.append x 
+                                               | :? string as o-> let a =
+                                                                    try
+                                                                        System.TimeSpan.Parse(o)
+                                                                    with
+                                                                        | _ -> System.TimeSpan(-21474836480000L)
+                                                                  [|a|] |> Array.append x
 
-                                           | :? float as o-> System.TimeSpan.FromSeconds(o)
-                                           | _ -> System.TimeSpan(-21474836480000L)
-                         )
+                                               | :? float as o-> [|System.TimeSpan.FromSeconds(o)|] |> Array.append x 
+                                               | _ -> [|System.TimeSpan(-21474836480000L)|] |> Array.append x 
+                             ) [||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.Minute(r.[0])
         | _ ->XFloat,kx.KObject.AMinute(r)
 
     let xtok1dimV (arg:obj array) =
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> System.TimeSpan(-21474836480000L)
-                                           | :? string as o-> 
-                                                    try
-                                                        System.TimeSpan.Parse(o)
-                                                    with
-                                                        | _ -> System.TimeSpan(-21474836480000L)
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|System.TimeSpan(-21474836480000L)|] |> Array.append x 
+                                               | :? string as o-> let a =
+                                                                    try
+                                                                        System.TimeSpan.Parse(o)
+                                                                    with
+                                                                        | _ -> System.TimeSpan(-21474836480000L)
+                                                                  [|a|] |> Array.append x
 
-                                           | :? float as o-> System.TimeSpan.FromSeconds(o)
-                                           | _ -> System.TimeSpan(-21474836480000L)
-                         )
+                                               | :? float as o-> [|System.TimeSpan.FromSeconds(o)|] |> Array.append x 
+                                               | _ -> [|System.TimeSpan(-21474836480000L)|] |> Array.append x 
+                             )[||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.Second(r.[0])
         | _ ->XFloat,kx.KObject.ASecond(r)
 
     let xtok1dimT (arg:obj array) = 
-        let r = arg |> Array.map (fun x -> match x with
-                                           | :? bool as o-> System.TimeSpan(-21474836480000L)
-                                           | :? string as o-> 
-                                                    try
-                                                        System.TimeSpan.Parse(o)
-                                                    with
-                                                        | _ -> System.TimeSpan(-21474836480000L)
+        let r = arg |> Array.fold (fun x y ->  match y with
+                                               | :? ExcelEmpty -> x
+                                               | :? ExcelError -> x
+                                               | :? ExcelMissing -> x
+                                               | :? bool as o-> [|System.TimeSpan(-21474836480000L)|] |> Array.append x 
+                                               | :? string as o-> let a =
+                                                                    try
+                                                                        System.TimeSpan.Parse(o)
+                                                                    with
+                                                                        | _ -> System.TimeSpan(-21474836480000L)
+                                                                  [|a|] |> Array.append x
 
-                                           | :? float as o-> System.TimeSpan.FromSeconds(o)
-                                           | _ -> System.TimeSpan(-21474836480000L)
-                         )
+                                               | :? float as o-> [|System.TimeSpan.FromSeconds(o)|] |> Array.append x 
+                                               | _ -> [|System.TimeSpan(-21474836480000L)|] |> Array.append x 
+                             ) [||]
         match r.Length with
         | 1 -> XFloat,kx.KObject.KTimespan(r.[0])
         | _ ->XFloat,kx.KObject.AKTimespan(r)
