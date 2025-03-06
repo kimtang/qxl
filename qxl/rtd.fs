@@ -49,8 +49,8 @@ module RtdKdb =
 
         // dict Seq.empty<string*kx.c>
 
-    type kdb_subscriber(uid:string,host:string,port:int,user:string,sub:string,append:int) = 
-        let uid,host,port,user,sub,append = uid,host,port,user,sub,append
+    type kdb_subscriber(uid:string,host:string,port:int,user:string,sub:string,keyed:bool,append:int) = 
+        let uid,host,port,user,sub,keyed,append = uid,host,port,user,sub,keyed,append
         let mutable connection:Option<kx.c> = None // kx.c(host,port,user)
         let mutable callback:(string*kx.KObject -> unit) = (fun (x,y) -> ())
         let mutable inSub = false
@@ -94,7 +94,7 @@ module RtdKdb =
                                 connection.Value.ks(sub)
                                 outerloop()
         member this.Desc 
-            with get() = (uid,host,port,user,sub,append)
+            with get() = (uid,host,port,user,sub,keyed,append)
         member this.Connected =
             match connection with
             | Some(c) -> c.Connected()
@@ -123,9 +123,9 @@ module RtdKdb =
 
         member this.receiveData(id:string,o:kx.KObject) =
 
-            let _,_,_,_,_,append = match subscriberMaps.ContainsKey id with
-                                   | true -> subscriberMaps.[id].Desc
-                                   | false -> "  ","  ",1,"  ","  ",1
+            let _,_,_,_,_,keyed,append = match subscriberMaps.ContainsKey id with
+                                         | true -> subscriberMaps.[id].Desc
+                                         | false -> "  ","  ",1,"  ","  ",false,1
 
 
             let mergeFlip1 (nkobject:kx.KObject,okobject:kx.KObject) = 
@@ -159,22 +159,57 @@ module RtdKdb =
                                                    | true -> let nk = oy |> List.zip ny
                                                                          |> List.map mergeFlip1
                                                              Some(kx.Flip(nx,nk))
-                | _ -> None
+                | _,_ -> None
+
+            let mergeDict (nkobject:kx.KObject) (okobject:kx.KObject) =
+                match nkobject,okobject with
+                | kx.Dict(ox,oy),kx.Dict(nx,ny) -> 
+                    match ox,oy,nx,ny with
+                    | kx.Flip(oxh,oxv),kx.Flip(oyh,oyv),kx.Flip(nxh,nxv),kx.Flip(nyh,nyv) ->
+                        let sameHeader1 = oxh |> Array.zip nxh |> Array.map (fun (x,y) -> x=y ) |> Array.reduce (fun x y -> x && y)
+                        let sameHeader2 = oyh |> Array.zip nyh |> Array.map (fun (x,y) -> x=y ) |> Array.reduce (fun x y -> x && y)
+                        
+                        if not sameHeader1 && sameHeader2 then None
+                        else
+                            let tmp = nxv |> List.mapi (fun i x -> oxv |> List.tryFindIndex (fun t -> kx.eq t x) )
+                            None
+
+                        // match sameHeader with
+                        // | false -> None
+                        // | true -> let r = nny |> List.map (fun x -> ooy |> List.tryFindIndex (fun t -> kx.eq t x) ) |> List.zip nny
+                        //           let newdata = r |> List.filter (fun (x,y)-> match y with
+                        //                                                       | None -> true
+                        //                                                       | _ -> false)
+                        //                           |> List.map (fun (x,y) -> x)
+                        //           let oldindex = r |> List.fold (fun s x -> match x with| k,None -> s| k,Some(i) -> s@[(i,k)] ) [] |> Map
+                        // 
+                        //           let ooy = ooy |>  List.mapi (fun i x -> if Map.containsKey i oldindex then oldindex.[i] else x )
+                        //           None
+                    | _,_,_,_ -> None
+                | _,_ -> None
                 
             seq <- seq + 1
 
-            let nkobject = match append,kobjMaps.ContainsKey id with
-                           | _,false ->  kobjMaps.Add(id,o)
-                                         o
-                           | 0,true ->   kobjMaps.[id] <- o                           
-                                         o
-                           | _,true -> let oldkobject =  kobjMaps.[id]                                     
-                                       let mo = mergeFlip o oldkobject
-                                       match mo with
-                                       | None -> kobjMaps.[id]<-o
-                                                 o
-                                       | Some(mo) -> kobjMaps.[id]<-mo
-                                                     mo
+            let nkobject = match keyed,append,kobjMaps.ContainsKey id with
+                           | _,_,false ->   kobjMaps.Add(id,o)
+                                            o
+                           | false,0,true ->   kobjMaps.[id] <- o                           
+                                               o
+                           | false,_,true ->   let oldkobject =  kobjMaps.[id]                                     
+                                               let mo = mergeFlip o oldkobject
+                                               match mo with
+                                               | None -> kobjMaps.[id]<-o
+                                                         o
+                                               | Some(mo) -> kobjMaps.[id]<-mo
+                                                             mo
+
+                           | true,_,true ->    let oldkobject =  kobjMaps.[id]                                     
+                                               let mo = mergeDict o oldkobject
+                                               match mo with
+                                               | None -> kobjMaps.[id]<-o
+                                                         o
+                                               | Some(mo) -> kobjMaps.[id]<-mo
+                                                             mo
 
             let o1 = ktox.ktox nkobject
             match objMaps.ContainsKey id with
@@ -210,8 +245,8 @@ module RtdKdb =
             ids |> Seq.iter(fun id -> 
                                 match subscriberMaps.ContainsKey id with
                                 | true -> let c = subscriberMaps.[id]
-                                          let uid,host,port,user,sub,append = c.Desc
-                                          let b = kdb_subscriber(uid,host,port,user,sub,append)
+                                          let uid,host,port,user,sub,keyed,append = c.Desc
+                                          let b = kdb_subscriber(uid,host,port,user,sub,keyed,append)
                                           subscriberMaps.[id] <- b
                                 | false -> ()
                            )

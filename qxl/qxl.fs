@@ -928,17 +928,17 @@ module qxl =
 
 
     [<ExcelFunction(Description="Create subscriber")>]
-    let qxl_open_subscriber (uid:string) (host:string) (port:int) (user:string) (passwd:string) (sub:string) (append:int)=
+    let qxl_open_subscriber (uid:string) (host:string) (port:int) (user:string) (passwd:string) (sub:string) (keyed:bool) (append:int)=
         match port with
         | 0 -> ExcelMissing :> obj
         | _ ->
             match rtd.RtdKdb.subscriberMaps.ContainsKey uid with
             | false ->
-                  let con = rtd.RtdKdb.kdb_subscriber(uid,host,port,user+":"+passwd,sub,append)
+                  let con = rtd.RtdKdb.kdb_subscriber(uid,host,port,user+":"+passwd,sub,keyed,append)
                   rtd.RtdKdb.subscriberMaps.Add(uid,con)               
             | true ->
                   rtd.RtdKdb.subscriberMaps.[uid].Close()
-                  rtd.RtdKdb.subscriberMaps.[uid] <- rtd.RtdKdb.kdb_subscriber(uid,host,port,user+":"+passwd,sub,append)
+                  rtd.RtdKdb.subscriberMaps.[uid] <- rtd.RtdKdb.kdb_subscriber(uid,host,port,user+":"+passwd,sub,keyed,append)
             uid :> obj
         
 

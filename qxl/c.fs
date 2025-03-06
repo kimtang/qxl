@@ -101,6 +101,120 @@ let td d =
     | _ -> raise(KException("Flipping a non dictionary is not allowed"))
 
 
+let rec eq (a:KObject) (b:KObject) =
+    match a,b with
+    | ERROR(a),ERROR(b) -> a=b
+    | NULL,NULL -> true
+    | Bool(a),Bool(b) -> a=b
+    | Guid(a),Guid(b) -> a=b
+    | Byte(a),Byte(b) -> a=b
+    | Short(a),Short(b) -> a=b
+    | Int(a),Int(b) -> a=b
+    | Long(a),Long(b) -> a=b
+    | Real(a),Real(b) -> a=b
+    | Float(a),Float(b) -> a=b
+    | Char(a),Char(b) -> a=b
+    | String(a),String(b) -> a=b
+    | Timestamp(a),Timestamp(b) -> a=b
+    | Month(a),Month(b) -> a=b
+    | Date(a),Date(b) -> a=b
+    | DateTime(a),DateTime(b) -> a=b
+    | KTimespan(a),KTimespan(b) -> a=b
+    | Minute(a),Minute(b) -> a=b
+    | Second(a),Second(b) -> a=b
+    | TimeSpan(a),TimeSpan(b) -> a=b
+    | ABool(a),ABool(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y) 
+    | AGuid(a),AGuid(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | AByte(a),AByte(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | AShort(a),AShort(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | AInt(a),AInt(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | ALong(a),ALong(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | AReal(a),AReal(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | AFloat(a),AFloat(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | AChar(a),AChar(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | AString(a),AString(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | ATimestamp(a),ATimestamp(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | AMonth(a),AMonth(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | ADate(a),ADate(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | ADateTime(a),ADateTime(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | AKTimespan(a),AKTimespan(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | AMinute(a),AMinute(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | ASecond(a),ASecond(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | ATimeSpan(a),ATimeSpan(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) |> Array.reduce (fun x y -> x && y)
+    | Dict(a1,a2),Dict(b1,b2) -> (eq a1 b1) && (eq a2 b2)
+    | Flip(a1,a2),Flip(b1,b2) -> let sameHeader = a1 |> Array.zip b1 |> Array.map (fun (x,y) -> x=y ) |> Array.reduce (fun x y -> x && y) 
+                                 match sameHeader with
+                                 | false -> false
+                                 | true -> a2 |> List.zip b2 |> List.map (fun (x,y) -> eq x y) |> List.reduce (fun x y -> x && y)
+    | AKObject(a),AKObject(b) -> a |> List.zip b |> List.map (fun (x,y) -> eq x y) |> List.reduce (fun x y -> x && y)
+    |_,_ -> false
+
+let eqA (a:KObject) (b:KObject) =
+    match a,b with
+    | ERROR(a),ERROR(b) -> [|a=b|]
+    | NULL,NULL -> [|true|]
+    | Bool(a),Bool(b) -> [|a=b|]
+    | Guid(a),Guid(b) -> [|a=b|]
+    | Byte(a),Byte(b) -> [|a=b|]
+    | Short(a),Short(b) -> [|a=b|]
+    | Int(a),Int(b) -> [|a=b|]
+    | Long(a),Long(b) -> [|a=b|]
+    | Real(a),Real(b) -> [|a=b|]
+    | Float(a),Float(b) -> [|a=b|]
+    | Char(a),Char(b) -> [|a=b|]
+    | String(a),String(b) -> [|a=b|]
+    | Timestamp(a),Timestamp(b) -> [|a=b|]
+    | Month(a),Month(b) -> [|a=b|]
+    | Date(a),Date(b) -> [|a=b|]
+    | DateTime(a),DateTime(b) -> [|a=b|]
+    | KTimespan(a),KTimespan(b) -> [|a=b|]
+    | Minute(a),Minute(b) -> [|a=b|]
+    | Second(a),Second(b) -> [|a=b|]
+    | TimeSpan(a),TimeSpan(b) -> [|a=b|]
+    | ABool(a),ABool(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y)  
+    | AGuid(a),AGuid(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | AByte(a),AByte(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | AShort(a),AShort(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | AInt(a),AInt(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | ALong(a),ALong(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | AReal(a),AReal(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | AFloat(a),AFloat(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | AChar(a),AChar(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | AString(a),AString(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | ATimestamp(a),ATimestamp(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | AMonth(a),AMonth(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | ADate(a),ADate(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | ADateTime(a),ADateTime(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | AKTimespan(a),AKTimespan(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | AMinute(a),AMinute(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | ASecond(a),ASecond(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | ATimeSpan(a),ATimeSpan(b) -> a |> Array.zip b |> Array.map (fun (x,y) -> x=y) 
+    | Dict(a1,a2),Dict(b1,b2) -> [|(eq a1 b1) && (eq a2 b2)|]
+    | Flip(a1,a2),Flip(b1,b2) -> let sameHeader = a1 |> Array.zip b1 |> Array.map (fun (x,y) -> x=y ) |> Array.reduce (fun x y -> x && y) 
+                                 match sameHeader with
+                                 | false -> [|false|]
+                                 | true -> a2 |> List.zip b2 |> List.map (fun (x,y) -> eq x y) |> List.toArray
+    | AKObject(a),AKObject(b) -> a |> List.zip b |> List.map (fun (x,y) -> eq x y) |> List.toArray
+    |_,_ -> [|false|]
+
+let lj (a:KObject) (b:KObject) =
+    match a,b with
+    | Dict(ak,av),Dict(bk,bv) ->
+        match ak,av,bk,bv with
+        | Flip(akh,akv),Flip(avh,avv),Flip(bkh,bkv),Flip(bvh,bvv)
+            -> let sameHeader = akh |> Array.zip bkh |> Array.map (fun (x,y) -> x=y ) |> Array.reduce (fun x y -> x && y)
+               let sameHeader1 = avh |> Array.zip bvh |> Array.map (fun (x,y) -> x=y ) |> Array.reduce (fun x y -> x && y)
+
+               if not sameHeader && sameHeader1 then NULL else
+               
+               // let tmp = bkv |> List.mapi (fun i x -> (i,akv |> List.tryFindIndex (fun t -> eq t x),x) )
+
+               // let tmp = akv |> List.zip bkv |> List.map (fun (b,a) -> (b,a)   )
+
+               NULL
+
+        | _,_,_,_ -> NULL
+    | _,_ -> NULL
 
 let qn k =
     match k with 
